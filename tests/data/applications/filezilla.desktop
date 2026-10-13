@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=FileZilla
+GenericName=FTP client
+Exec=filezilla
+Icon=filezilla

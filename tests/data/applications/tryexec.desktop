@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Missing Binary
+Exec=selsearch-test-does-not-exist
+TryExec=selsearch-test-does-not-exist
