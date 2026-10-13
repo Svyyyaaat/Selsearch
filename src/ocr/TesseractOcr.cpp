@@ -49,6 +49,27 @@ QString findTessdata()
     return {};
 }
 
+// Tesseract's layout analysis expects dark text on a light page and skips
+// light-on-dark UI panels. Normalise: greyscale, then invert every pixel whose
+// local background (a heavily downscaled copy) is dark.
+QImage normaliseForTesseract(const QImage &input, qreal factor)
+{
+    QImage gray = input.convertToFormat(QImage::Format_Grayscale8);
+    if (factor != 1.0)
+        gray = gray.scaled(gray.size() * factor, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    const QSize bgSize(std::max(1, gray.width() / 24), std::max(1, gray.height() / 24));
+    const QImage bg = gray.scaled(bgSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                          .scaled(gray.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    for (int y = 0; y < gray.height(); ++y) {
+        uchar *row = gray.scanLine(y);
+        const uchar *b = bg.constScanLine(y);
+        for (int x = 0; x < gray.width(); ++x)
+            if (b[x] < 110)
+                row[x] = 255 - row[x];
+    }
+    return gray;
+}
+
 class TesseractEngine final : public OcrEngine {
 public:
     TesseractEngine()
@@ -90,11 +111,8 @@ public:
 
         // Tesseract wants ~20-40 px glyphs; screen text at 1x is smaller.
         const qreal factor = (input.width() * input.height() < 6'000'000) ? 2.0 : 1.0;
-        QImage img = input.convertToFormat(QImage::Format_RGB888);
-        if (factor != 1.0)
-            img = img.scaled(img.size() * factor, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-
-        m_api->SetImage(img.constBits(), img.width(), img.height(), 3, int(img.bytesPerLine()));
+        const QImage img = normaliseForTesseract(input, factor);
+        m_api->SetImage(img.constBits(), img.width(), img.height(), 1, int(img.bytesPerLine()));
         m_api->SetSourceResolution(144);
         if (m_api->Recognize(nullptr) != 0) {
             result.error = QStringLiteral("tesseract recognition failed");
