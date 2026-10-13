@@ -37,6 +37,7 @@ const QVariantMap &Config::defaults()
         // Search
         {QStringLiteral("search.engine"), QStringLiteral("duckduckgo")},
         {QStringLiteral("search.custom_url"), QString()},  // used when engine = "custom"; %s = query
+        {QStringLiteral("search.searxng_url"), QStringLiteral("https://searx.be")},  // used when engine = "searxng"
         {QStringLiteral("search.image_engine"), QStringLiteral("google_lens")},
         {QStringLiteral("search.suggestions"), false},  // as-you-type suggestions from the engine
         {QStringLiteral("search.open_in"), QStringLiteral("panel")},  // panel | browser

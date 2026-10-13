@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Quoting Test
+Comment=Semicolons\; and\sescapes
+Exec=sh -c "echo \\"hello world\\" \\$HOME \\\\ done" %f --name=%c --icon-arg %i --file=%k 100%%
+Icon=quoting-icon
+Keywords=alpha;beta\;gamma;

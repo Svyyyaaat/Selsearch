@@ -1,0 +1,32 @@
+[Desktop Entry]
+Version=1.0
+Name=Firefox
+Name[de]=Firefox
+GenericName=Web Browser
+GenericName[de]=Webbrowser
+GenericName[sr@latin]=Veb pregledač
+Comment=Browse the World Wide Web
+Comment[de]=Im Internet surfen
+Keywords=Internet;WWW;Browser;Web;Explorer
+Keywords[de]=Internet;WWW;Browser;Web;Surfen
+Exec=firefox %u
+Icon=firefox
+Terminal=false
+Type=Application
+MimeType=text/html;x-scheme-handler/http;
+Categories=Network;WebBrowser;
+Actions=new-window;new-private-window;broken;
+
+# Comments and blank lines are ignored.
+[Desktop Action new-window]
+Name=New Window
+Name[de]=Neues Fenster
+Exec=firefox --new-window %u
+
+[Desktop Action new-private-window]
+Name=New Private Window
+Name[de]=Neues privates Fenster
+Exec=firefox --private-window %u
+
+[Desktop Action broken]
+Name=No Exec Here

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Files
+GenericName=File Manager
+Exec=nautilus --new-window %U
+Icon=org.gnome.Nautilus
+Keywords=folder;manager;explore;disk;filesystem;

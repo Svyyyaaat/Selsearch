@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Htop
+GenericName=Process Viewer
+Comment=Show system processes
+Exec=htop
+Icon=htop
+Terminal=true
+Path=/tmp
+Keywords=system;process;task
