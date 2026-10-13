@@ -13,6 +13,9 @@ namespace selsearch {
 
 class Config;
 class FrameStore;
+class Launcher;
+class Settings;
+class WebPanel;
 class IpcServer;
 class LensController;
 class OcrService;
@@ -27,8 +30,9 @@ public:
     bool init(QString *error);
 
     // Opens a URL produced by the UI. "selsearch:search?q=..." is resolved
-    // with the configured engine; everything else opens as is.
-    void openUrl(const QUrl &url);
+    // with the configured engine. Web pages go to the results panel or the
+    // browser (search.open_in); other URLs (files, apps) open as is.
+    void openUrl(const QUrl &url, const QString &title = {});
 
 private:
     void handle(const QJsonObject &request, const std::function<void(const QJsonObject &)> &reply);
@@ -41,6 +45,9 @@ private:
     std::unique_ptr<QQmlEngine> m_engine;
     FrameStore *m_frames = nullptr;  // owned by the engine
     std::unique_ptr<LensController> m_lens;
+    std::unique_ptr<Launcher> m_launcher;
+    std::unique_ptr<Settings> m_settings;
+    std::unique_ptr<WebPanel> m_web;
 };
 
 }  // namespace selsearch

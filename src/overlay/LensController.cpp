@@ -3,8 +3,10 @@
 
 #include "FrameStore.h"
 #include "compositor/Compositor.h"
+#include "core/Accent.h"
 #include "core/Config.h"
 #include "ocr/OcrService.h"
+#include "translate/TranslationLanguages.h"
 #include "translate/Translator.h"
 
 #include <QClipboard>
@@ -130,8 +132,7 @@ QString LensController::theme() const
 
 QColor LensController::accent() const
 {
-    const QColor c(m_config.string(QStringLiteral("general.accent")));
-    return c.isValid() ? c : QColor(QStringLiteral("#8e9bff"));
+    return accentColor(m_config);
 }
 
 bool LensController::recognizeText() const { return m_config.boolean(QStringLiteral("lens.recognize_text")); }
@@ -151,12 +152,7 @@ QString LensController::imageEngineName() const
 
 QString LensController::translateTarget() const
 {
-    QString t = m_config.string(QStringLiteral("translate.target"));
-    if (t.isEmpty())
-        t = QLocale::system().name().section(QLatin1Char('_'), 0, 0);
-    if (t.isEmpty() || t == QLatin1String("C"))
-        t = QStringLiteral("en");
-    return t;
+    return effectiveTargetLanguage(m_config);
 }
 
 void LensController::setActiveScreen(const QString &name)
@@ -567,30 +563,22 @@ void LensController::clearTranslations(const QString &screen)
 void LensController::setTranslateTarget(const QString &code)
 {
     m_config.setValue(QStringLiteral("translate.target"), code);
-    QStringList recent = m_config.list(QStringLiteral("translate.recent"));
-    recent.removeAll(code);
-    recent.prepend(code);
-    while (recent.size() > 3)
-        recent.removeLast();
-    m_config.setValue(QStringLiteral("translate.recent"), recent);
+    addRecentTranslationLanguage(m_config, code);
 }
 
 QStringList LensController::recentTranslateLanguages() const
 {
-    return m_config.list(QStringLiteral("translate.recent"));
+    return recentTranslationLanguages(m_config);
 }
 
 QVariantList LensController::translateLanguages() const
 {
-    // Replaced by the translation module's language table once merged.
-    static const QList<QPair<const char *, const char *>> langs = {
-        {"en", "English"}, {"ru", "Русский"}, {"uk", "Українська"}, {"de", "Deutsch"}, {"fr", "Français"},
-        {"es", "Español"}, {"it", "Italiano"}, {"pt", "Português"}, {"pl", "Polski"}, {"nl", "Nederlands"},
-        {"tr", "Türkçe"}, {"ja", "日本語"}, {"zh", "中文"}, {"ko", "한국어"}, {"ar", "العربية"},
-    };
     QVariantList out;
-    for (const auto &l : langs)
-        out << QVariantMap{{QStringLiteral("code"), QString::fromLatin1(l.first)}, {QStringLiteral("name"), QString::fromUtf8(l.second)}};
+    for (const auto &l : translationLanguages()) {
+        const QString name = l.nativeName == l.englishName ? l.nativeName
+                                                           : QStringLiteral("%1 · %2").arg(l.nativeName, l.englishName);
+        out << QVariantMap{{QStringLiteral("code"), l.code}, {QStringLiteral("name"), name}};
+    }
     return out;
 }
 

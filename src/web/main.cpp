@@ -79,6 +79,7 @@ int main(int argc, char **argv)
         layer->setAnchors(LayerShellQt::Window::AnchorTop);
         layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
         layer->setScope(QStringLiteral("selsearch-results"));
+        layer->setScreenConfiguration(LayerShellQt::Window::ScreenFromCompositor);  // the focused output
         layer->setMargins(QMargins(0, 72, 0, 0));
     }
 
@@ -99,9 +100,6 @@ int main(int argc, char **argv)
             buffer.remove(0, nl + 1);
             const QString cmd = o.value(QStringLiteral("cmd")).toString();
             if (cmd == QLatin1String("open")) {
-                QScreen *screen = QGuiApplication::screenAt(QPoint(o.value(QStringLiteral("x")).toInt(), o.value(QStringLiteral("y")).toInt()));
-                if (screen)
-                    window->setScreen(screen);
                 Q_EMIT bridge.openRequested(o.value(QStringLiteral("url")).toString(), o.value(QStringLiteral("title")).toString());
                 window->show();
                 window->requestActivate();
