@@ -115,7 +115,7 @@ ApplicationWindow {
                 padding: 28
                 spacing: 4
                 Text {
-                    text: win.pages[win.page].name
+                    text: win.settings.welcome ? qsTr("Welcome to Selsearch") : win.pages[win.page].name
                     color: win.fg
                     font.pixelSize: 22
                     font.weight: Font.DemiBold
@@ -123,6 +123,13 @@ ApplicationWindow {
                 }
                 Loader {
                     width: parent.width - 56
+                    visible: win.settings.welcome
+                    active: visible
+                    sourceComponent: welcomePage
+                }
+                Loader {
+                    width: parent.width - 56
+                    visible: !win.settings.welcome
                     sourceComponent: [appearancePage, lensPage, searchPage, ocrPage, translatePage, aiPage, launcherPage, shortcutsPage, aboutPage][win.page]
                 }
             }
@@ -130,6 +137,93 @@ ApplicationWindow {
     }
 
     // ================= pages =================
+
+    Component {
+        id: welcomePage
+        Column {
+            spacing: 18
+            Text {
+                width: parent.width
+                wrapMode: Text.Wrap
+                color: win.fgDim
+                font.pixelSize: 14
+                text: qsTr("Freeze your screen, select anything — text, an image, a window — then copy, translate, search or ask about it. Recognition and translation run on this computer; nothing is sent anywhere unless you search the web or use a remote AI.")
+            }
+            WelcomeStep {
+                number: 1
+                title: qsTr("Bind the shortcuts")
+                body: qsTr("Add these lines to ~/.config/hypr/hyprland.lua (other compositors: see Shortcuts).")
+                Column {
+                    width: parent.width
+                    spacing: 8
+                    Rectangle {
+                        width: parent.width
+                        height: welcomeSnippet.implicitHeight + 20
+                        radius: 10
+                        color: "#0b0c0f"
+                        border.color: win.line
+                        TextEdit {
+                            id: welcomeSnippet
+                            x: 12; y: 10
+                            width: parent.width - 24
+                            readOnly: true
+                            selectByMouse: true
+                            wrapMode: Text.WrapAnywhere
+                            font.family: "monospace"
+                            font.pixelSize: 12
+                            color: "#c9ccd6"
+                            text: win.settings.hyprlandSnippet()
+                        }
+                    }
+                    Button { text: qsTr("Copy"); onClicked: win.settings.copy(welcomeSnippet.text) }
+                }
+            }
+            WelcomeStep {
+                number: 2
+                title: qsTr("Better text recognition (optional, ~25 MB)")
+                body: win.settings.ocrStatus
+                Button {
+                    text: win.settings.ocrDownloading ? qsTr("Downloading…") : qsTr("Download PP-OCRv5 models")
+                    enabled: !win.settings.ocrDownloading
+                    onClicked: win.settings.downloadOcrModels()
+                }
+            }
+            WelcomeStep {
+                number: 3
+                title: qsTr("AI answers (optional)")
+                body: qsTr("Point Selsearch at a local model server, e.g. install ollama and run: ollama pull qwen3-vl:4b. You can change this any time under AI.")
+                Button { text: qsTr("Test connection"); onClicked: win.settings.testAi() }
+            }
+            Text { visible: win.settings.aiStatus.length > 0; text: win.settings.aiStatus; color: win.fgDim; font.pixelSize: 12 }
+            Button {
+                text: qsTr("Done")
+                highlighted: true
+                onClicked: win.settings.finishWelcome()
+            }
+        }
+    }
+
+    component WelcomeStep: Row {
+        id: ws
+        property int number
+        property string title
+        property string body
+        default property alias content: stepBody.data
+        width: parent ? parent.width : 400
+        spacing: 14
+        Rectangle {
+            width: 28; height: 28; radius: 14
+            color: Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.18)
+            Text { anchors.centerIn: parent; text: ws.number; color: win.accent; font.pixelSize: 13; font.weight: Font.DemiBold }
+        }
+        Column {
+            width: ws.width - 42
+            spacing: 8
+            Text { width: parent.width; text: ws.title; color: win.fg; font.pixelSize: 15; font.weight: Font.Medium; wrapMode: Text.Wrap }
+            Text { width: parent.width; text: ws.body; color: win.fgDim; font.pixelSize: 13; wrapMode: Text.Wrap }
+            Item { id: stepBody; width: parent.width; height: childrenRect.height }
+        }
+    }
 
     Component {
         id: appearancePage

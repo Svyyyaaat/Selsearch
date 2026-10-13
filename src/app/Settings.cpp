@@ -14,6 +14,8 @@
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
+#include <QStandardPaths>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QLoggingCategory>
@@ -127,6 +129,30 @@ void Settings::show()
         m_window->raise();
         m_window->requestActivate();
     }
+}
+
+static QString welcomeMarker()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericStateLocation) + QStringLiteral("/selsearch/welcomed");
+}
+
+void Settings::showWelcomeIfFirstRun()
+{
+    if (QFileInfo::exists(welcomeMarker()))
+        return;
+    m_welcome = true;
+    Q_EMIT welcomeChanged();
+    show();
+}
+
+void Settings::finishWelcome()
+{
+    QDir().mkpath(QFileInfo(welcomeMarker()).absolutePath());
+    QFile f(welcomeMarker());
+    if (f.open(QIODevice::WriteOnly))
+        f.write("1\n");
+    m_welcome = false;
+    Q_EMIT welcomeChanged();
 }
 
 void Settings::testAi()

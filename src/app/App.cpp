@@ -75,6 +75,8 @@ bool App::init(QString *error)
     m_settings = std::make_unique<Settings>(*m_config, *m_ocr);
     m_settings->setEngine(m_engine.get());
     connect(m_launcher.get(), &Launcher::settingsRequested, m_settings.get(), &Settings::show);
+    if (!qEnvironmentVariableIsSet("SELSEARCH_NO_WELCOME"))
+        QTimer::singleShot(500, m_settings.get(), &Settings::showWelcomeIfFirstRun);
 
     connect(m_lens.get(), &LensController::askRequested, this, [this](const QImage &image, const QString &text) {
         if (text == QLatin1String("selsearch:image-search")) {

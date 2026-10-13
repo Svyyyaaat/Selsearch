@@ -29,6 +29,7 @@ class Settings : public QObject {
     Q_PROPERTY(bool ocrDownloading READ ocrDownloading NOTIFY ocrStatusChanged)
     Q_PROPERTY(QString version READ version CONSTANT)
     Q_PROPERTY(QString configPath READ configPath CONSTANT)
+    Q_PROPERTY(bool welcome READ welcome NOTIFY welcomeChanged)
 public:
     Settings(Config &config, OcrService &ocr, QObject *parent = nullptr);
     void setEngine(QQmlEngine *engine);
@@ -45,6 +46,10 @@ public:
     QString configPath() const;
 
     Q_INVOKABLE void show();
+    // First start: show the welcome page once (marker in $XDG_STATE_HOME).
+    void showWelcomeIfFirstRun();
+    bool welcome() const { return m_welcome; }
+    Q_INVOKABLE void finishWelcome();
     Q_INVOKABLE void testAi();
     Q_INVOKABLE void downloadOcrModels();
     Q_INVOKABLE void openConfigFile();
@@ -55,6 +60,7 @@ Q_SIGNALS:
     void aiModelsChanged();
     void aiStatusChanged();
     void ocrStatusChanged();
+    void welcomeChanged();
 
 private:
     Config &m_config;
@@ -65,6 +71,7 @@ private:
     QStringList m_aiModels;
     QString m_aiStatus;
     bool m_ocrDownloading = false;
+    bool m_welcome = false;
     QString m_ocrProgress;
 };
 
