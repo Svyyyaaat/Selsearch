@@ -1,0 +1,47 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Test double for the translateLocally CLI (https://github.com/XapaJIaMnu/translateLocally).
+# Mimics what Selsearch relies on:
+#   -l            "<Src>-<Trg> type: <t> version: <v>; To invoke do -m <shortName>" per model
+#   -m <model>    translate stdin to stdout, one output line per input line
+#                 (here: "<target code>[<input line>]")
+# Unknown models fail like the real CLI: message on stderr, exit code 1.
+# Every invocation's arguments are appended to $FAKE_TL_LOG when set.
+# FAKE_TL_FAIL=1 makes -m fail with a message on stderr and exit code 22.
+
+[ -n "$FAKE_TL_LOG" ] && echo "$*" >> "$FAKE_TL_LOG"
+
+case "$1" in
+-l|--list-models)
+    cat <<'MODELS'
+Russian-English type: tiny version: 1; To invoke do -m ru-en-tiny
+English-German type: tiny version: 2; To invoke do -m en-de-tiny
+English-German type: base version: 1; To invoke do -m en-de-base
+German-English type: tiny version: 1; To invoke do -m de-en-tiny
+Serbo-Croatian-English type: tiny version: 1; To invoke do -m hbs-eng-tiny
+MODELS
+    exit 0
+    ;;
+-m|--model)
+    model="$2"
+    case "$model" in
+    ru-en-tiny|en-de-tiny|en-de-base|de-en-tiny|hbs-eng-tiny) ;;
+    *)
+        echo "We could not find a model identified as: \"$model\" . Use translateLocally -l to list available models or use the GUI to download some from the internet." >&2
+        exit 1
+        ;;
+    esac
+    if [ -n "$FAKE_TL_FAIL" ]; then
+        cat > /dev/null
+        echo "Model failed to load: out of memory" >&2
+        exit 22
+    fi
+    trg=$(echo "$model" | cut -d- -f2)
+    while IFS= read -r line || [ -n "$line" ]; do
+        printf '%s[%s]\n' "$trg" "$line"
+    done
+    exit 0
+    ;;
+esac
+echo "We are in command line mode, but there's nothing for us to do. Some control flow mistake maybe?" >&2
+exit 2

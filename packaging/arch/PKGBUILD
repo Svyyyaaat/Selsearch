@@ -1,0 +1,41 @@
+# Maintainer: Svyyyaaat
+pkgname=selsearch-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Local screen search for Wayland: freeze the screen, select text or images, copy, translate, search or ask AI. Plus an Alt+Space launcher."
+arch=('x86_64' 'aarch64')
+url="https://github.com/svyyyaaat/selsearch"
+license=('MIT')
+depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'layer-shell-qt' 'wayland' 'onnxruntime' 'tesseract' 'leptonica')
+makedepends=('git' 'cmake' 'ninja' 'qt6-shadertools' 'wayland-protocols')
+optdepends=(
+    'qt6-webengine: results panel inside Selsearch (otherwise results open in your browser)'
+    'tesseract-data-eng: English text recognition fallback'
+    'tesseract-data-rus: Russian text recognition fallback'
+    'translatelocally-bin: fully local translation (Firefox Translations models)'
+    'ollama: local AI answers (e.g. ollama pull qwen3-vl:4b)'
+    'plocate: instant file name search'
+    'xdg-desktop-portal: screen capture on GNOME/KDE'
+)
+provides=('selsearch')
+conflicts=('selsearch')
+source=("git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd selsearch
+    printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cmake -B build -S selsearch -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DSELSEARCH_BUILD_TESTS=OFF
+    cmake --build build
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+    install -Dm644 selsearch/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

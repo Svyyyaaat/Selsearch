@@ -1,0 +1,12 @@
+[Unit]
+Description=Selsearch screen search daemon
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/selsearchd
+Restart=on-failure
+Slice=app.slice
+
+[Install]
+WantedBy=graphical-session.target

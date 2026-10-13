@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Vendor Tool
+Exec=vendor-tool --open %F
+Icon=vendor-tool
