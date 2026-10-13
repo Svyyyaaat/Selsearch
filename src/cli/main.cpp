@@ -41,7 +41,6 @@ Usage:
 Hyprland 0.55+ (~/.config/hypr/hyprland.lua):
   hl.bind("ALT + Space", hl.dsp.exec_cmd("selsearch launcher"))
   hl.bind("SUPER + S", hl.dsp.exec_cmd("selsearch lens"))
-  hl.layer_rule({ match = { namespace = "selsearch-lens" }, name = "selsearch-lens", no_anim = true })
 Run `selsearch config` for the full snippet (autostart, other compositors).
 )";
 

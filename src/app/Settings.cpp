@@ -243,8 +243,10 @@ QString Settings::hyprlandSnippet() const
         "hl.bind(\"ALT + Space\", hl.dsp.exec_cmd(\"selsearch launcher\"))\n"
         "hl.bind(\"SUPER + S\", hl.dsp.exec_cmd(\"selsearch lens\"))\n"
         "hl.bind(\"SUPER + SHIFT + S\", hl.dsp.exec_cmd(\"selsearch lens --text\"))\n"
-        "-- The overlay shows a frozen screen: no open/close animation.\n"
-        "hl.layer_rule({ match = { namespace = \"selsearch-lens\" }, name = \"selsearch-lens\", no_anim = true })\n"
+        "-- Selsearch's surfaces use these layer namespaces, so your layer animations\n"
+        "-- apply to them: selsearch-lens, selsearch-launcher, selsearch-results.\n"
+        "-- Optional, to make the lens appear instantly instead:\n"
+        "-- hl.layer_rule({ match = { namespace = \"selsearch-lens\" }, name = \"selsearch-lens\", no_anim = true })\n"
         "-- Start the daemon with the session (skip if you enabled selsearch.service).\n"
         "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"selsearchd\") end)\n");
 }

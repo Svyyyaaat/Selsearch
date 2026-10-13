@@ -3,7 +3,7 @@ import QtQuick.Shapes
 import Selsearch
 
 // One lens overlay per screen. Shows the frozen frame and handles selection:
-// drag a rectangle, circle/scribble (lasso → bounding box), click a window,
+// drag a rectangle, click a window,
 // or drag across recognised text to select words.
 Window {
     id: win
@@ -27,9 +27,8 @@ Window {
     property real selRadius: 18
     property real focusAmt: 0
     property real wave: -1
+    property real pulse: -1
     property real time: 0
-    property bool lasso: false
-    property var lassoPoints: []
     property point pressPos
     property rect pressSel
     property string dragKind: ""   // new | move | resize-<edges> | text
@@ -55,12 +54,20 @@ Window {
     }
     readonly property var regionWords: phase === "selected" ? wordsIn(sel) : []
     readonly property bool textMode: lens.mode === "text"
-    readonly property var words: lensScreen.words
+    // Plain JS copies of the screen's words/windows. Reading lensScreen.words
+    // converts the whole C++ list on every access, which made hover hit-tests
+    // on every mouse move expensive on text-heavy screens.
+    property var words: []
+    property var windowList: []
     readonly property int selFirst: Math.min(textAnchor, textFocus)
     readonly property int selLast: Math.max(textAnchor, textFocus)
 
     // Lines index for nearest-word lookups: [{top, bottom, first, last}]
     property var lines: []
+    function reloadWords() {
+        words = lensScreen.words.map(w => ({ x: w.x, y: w.y, w: w.w, h: w.h, text: w.text, line: w.line, index: w.index, space: w.space }))
+    }
+    Component.onCompleted: { reloadWords(); windowList = lensScreen.windows.map(w => ({ x: w.x, y: w.y, w: w.w, h: w.h })) }
     onWordsChanged: {
         let out = []
         for (let w of words) {
@@ -71,13 +78,13 @@ Window {
         lines = out.filter(l => l !== undefined)
         if (lens.mode === "translate" && words.length > 0 && lensScreen.focused && !translated)
             translateAll()
+        if (words.length > 0)
+            pulseAnim.restart()   // text is ready: the edge dots flash once
     }
 
     function clearSelection() {
         phase = "idle"
         sel = Qt.rect(0, 0, 0, 0)
-        lasso = false
-        lassoPoints = []
         textAnchor = -1
         textFocus = -1
         picked = ({})
@@ -90,6 +97,8 @@ Window {
 
     Connections {
         target: win.lensScreen
+        function onWordsChanged() { win.reloadWords() }
+        function onWindowsChanged() { win.windowList = win.lensScreen.windows.map(w => ({ x: w.x, y: w.y, w: w.w, h: w.h })) }
         function onReset() { win.clearSelection(); win.interacted = false; win.hoverWindow = null; win.hoverWord = -1 }
     }
     Connections {
@@ -139,7 +148,7 @@ Window {
     }
     function windowAt(x, y) {
         if (!lens.snapToWindows) return null
-        for (let w of lensScreen.windows) if (contains(w, x, y)) return w
+        for (let w of windowList) if (contains(w, x, y)) return w
         return null
     }
     function edgesAt(x, y) {
@@ -263,14 +272,19 @@ Window {
     NumberAnimation { id: radiusAnim; target: win; property: "selRadius"; from: 6; to: 18; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
     NumberAnimation { id: waveAnim; target: win; property: "wave"; from: 0; to: 1; duration: 1100; easing.type: Easing.OutCubic
         onFinished: win.wave = -1 }
-    // Clock for the dot shimmer / scan line; runs only while the lens is up.
-    NumberAnimation on time {
+    NumberAnimation { id: pulseAnim; target: win; property: "pulse"; from: 0; to: 1; duration: 900; easing.type: Easing.OutQuad
+        onFinished: win.pulse = -1 }
+    // Clock for the dot shimmer / edge glow, stepped at ~30 fps: the glow is
+    // ambient, and redrawing full-screen overlays at 144 Hz+ on every monitor
+    // would keep a core busy. Interactions still render at full rate.
+    Timer {
+        interval: 33
+        repeat: true
         running: win.visible && win.themeName !== "mono"
-        from: 0; to: 3600; duration: 3600 * 1000
-        loops: Animation.Infinite
+        property real started: 0
+        onRunningChanged: if (running) started = Date.now()
+        onTriggered: win.time = (Date.now() - started) / 1000
     }
-    // Lasso → rectangle "snap"
-    PropertyAnimation { id: snapAnim; target: win; property: "sel"; duration: 360; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
 
     // ---- scene --------------------------------------------------------------------
     Item {
@@ -301,6 +315,7 @@ Window {
             property real rimAlpha: win.phase === "drawing" ? 0.75 : 0.95
             property real rimWidth: win.themeName === "aurora" ? 2.0 : 1.5
             property real wave: win.wave
+            property real pulse: win.pulse
             property real time: win.time
             property real dots: win.themeName === "mono" ? 0 : (win.isTextSel ? 0.25 : 1)
             property real spacing: 9
@@ -312,12 +327,22 @@ Window {
         }
 
         // Hovered window outline (click selects the window).
+        // It stays put while the pointer moves between text and empty space
+        // inside the same window, and fades instead of popping.
         Rectangle {
-            visible: win.hoverWindow !== null && win.phase === "idle" && win.hoverWord < 0
-            x: win.hoverWindow ? win.hoverWindow.x + 1 : 0
-            y: win.hoverWindow ? win.hoverWindow.y + 1 : 0
-            width: win.hoverWindow ? win.hoverWindow.w - 2 : 0
-            height: win.hoverWindow ? win.hoverWindow.h - 2 : 0
+            id: windowOutline
+            property var target: null
+            Connections {
+                target: win
+                function onHoverWindowChanged() { if (win.hoverWindow) windowOutline.target = win.hoverWindow }
+            }
+            opacity: win.hoverWindow !== null && win.phase === "idle" ? 1 : 0
+            visible: opacity > 0 && target !== null
+            Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+            x: target ? target.x + 1 : 0
+            y: target ? target.y + 1 : 0
+            width: target ? target.w - 2 : 0
+            height: target ? target.h - 2 : 0
             radius: 10
             color: Qt.rgba(1, 1, 1, 0.04)
             border.color: Qt.rgba(1, 1, 1, 0.55)
@@ -341,6 +366,7 @@ Window {
             color: strong ? Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.42) : Qt.rgba(1, 1, 1, 0.16)
             border.color: strong ? Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.85) : "transparent"
             border.width: strong ? 1 : 0
+            Behavior on color { ColorAnimation { duration: 90 } }
         }
         // Words inside a finished region cascade in.
         Repeater {
@@ -359,20 +385,54 @@ Window {
                 }
             }
         }
-        // Selected words (drag range and Ctrl+click picks).
-        Repeater {
-            model: win.selectedWordList
-            delegate: WordPill {
-                required property var modelData
-                word: modelData
-                strong: true
+        // Selected words (drag range and Ctrl+click picks). Keyed by word
+        // index so extending a selection only animates the new words.
+        ListModel { id: selModel }
+        Connections {
+            target: win
+            // Diff instead of resetting, so existing pills don't re-animate.
+            function onSelectedWordListChanged() {
+                const want = {}
+                for (const w of win.selectedWordList) want[w.index] = true
+                for (let i = selModel.count - 1; i >= 0; --i) {
+                    const idx = selModel.get(i).idx
+                    if (want[idx]) delete want[idx]
+                    else selModel.remove(i)
+                }
+                for (const k in want) selModel.append({ idx: Number(k) })
             }
         }
-        // Hovered word.
+        Repeater {
+            model: selModel
+            delegate: WordPill {
+                id: selPill
+                required property int idx
+                word: idx < win.words.length ? win.words[idx] : ({ x: 0, y: 0, w: 0, h: 0 })
+                strong: true
+                opacity: 0
+                scale: 0.92
+                Component.onCompleted: appear.start()
+                ParallelAnimation {
+                    id: appear
+                    NumberAnimation { target: selPill; property: "opacity"; to: 1; duration: 90; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: selPill; property: "scale"; to: 1; duration: 120; easing.type: Easing.OutBack; easing.overshoot: 2 }
+                }
+            }
+        }
+        // Hovered word: glides from word to word and fades in/out.
         WordPill {
-            visible: win.hoverWord >= 0 && win.hoverWord < win.words.length && !win.isSelectedWord(win.hoverWord)
-            word: visible ? win.words[win.hoverWord] : ({ x: 0, y: 0, w: 0, h: 0 })
+            id: hoverPill
+            readonly property bool active: win.hoverWord >= 0 && win.hoverWord < win.words.length && !win.isSelectedWord(win.hoverWord)
+            property var last: ({ x: 0, y: 0, w: 0, h: 0 })
+            word: active ? win.words[win.hoverWord] : last
+            onWordChanged: if (active) last = word
             color: Qt.rgba(1, 1, 1, 0.22)
+            opacity: active ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: 110 } }
+            Behavior on x { enabled: hoverPill.opacity > 0.5; NumberAnimation { duration: 80; easing.type: Easing.OutCubic } }
+            Behavior on y { enabled: hoverPill.opacity > 0.5; NumberAnimation { duration: 80; easing.type: Easing.OutCubic } }
+            Behavior on width { enabled: hoverPill.opacity > 0.5; NumberAnimation { duration: 80; easing.type: Easing.OutCubic } }
         }
 
         // Translations painted over the original lines.
@@ -402,32 +462,6 @@ Window {
                     verticalAlignment: Text.AlignVCenter
                     elide: Text.ElideRight
                 }
-            }
-        }
-
-        // Lasso stroke while circling.
-        Shape {
-            id: lassoShape
-            anchors.fill: parent
-            visible: win.lasso && win.lassoPoints.length > 1
-            opacity: win.phase === "drawing" ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 220 } }
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                strokeColor: Qt.rgba(win.rimA.r, win.rimA.g, win.rimA.b, 0.28)
-                strokeWidth: 12
-                fillColor: "transparent"
-                capStyle: ShapePath.RoundCap
-                joinStyle: ShapePath.RoundJoin
-                PathPolyline { path: win.lassoPoints }
-            }
-            ShapePath {
-                strokeColor: win.rimA
-                strokeWidth: 3.5
-                fillColor: "transparent"
-                capStyle: ShapePath.RoundCap
-                joinStyle: ShapePath.RoundJoin
-                PathPolyline { path: win.lassoPoints }
             }
         }
 
@@ -477,7 +511,11 @@ Window {
                 const e = win.edgesAt(x, y)
                 if (e) { cursorShape = win.cursorFor(e); win.hoverWord = -1; return }
                 win.hoverWord = win.lens.recognizeText ? win.wordAt(x, y) : -1
-                if (win.hoverWord >= 0) { cursorShape = Qt.IBeamCursor; win.hoverWindow = null; return }
+                if (win.hoverWord >= 0) {
+                    cursorShape = Qt.IBeamCursor
+                    win.hoverWindow = win.phase === "idle" ? win.windowAt(x, y) : null
+                    return
+                }
                 if (win.phase === "selected" && win.contains(win.sel, x, y)) { cursorShape = Qt.OpenHandCursor; return }
                 cursorShape = Qt.CrossCursor
                 win.hoverWindow = win.phase === "idle" ? win.windowAt(x, y) : null
@@ -498,29 +536,7 @@ Window {
                         focusAnim.to = 0.45; focusAnim.restart()
                         if (win.translated) { win.lens.clearTranslations(win.lensScreen.name); win.translated = false }
                     }
-                    let pts = win.lassoPoints
-                    pts.push(p)
-                    win.lassoPoints = pts
-                    const direct = win.rectFromPoints(win.pressPos, p)
-                    // A lasso encloses area; a drag that doubles back does not.
-                    // Re-evaluated on every move so pulling back shrinks the box.
-                    if (pts.length > 8) {
-                        let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9, area = 0
-                        for (let k = 0; k < pts.length; ++k) {
-                            const q = pts[k], n = pts[(k + 1) % pts.length]
-                            minX = Math.min(minX, q.x); minY = Math.min(minY, q.y); maxX = Math.max(maxX, q.x); maxY = Math.max(maxY, q.y)
-                            area += q.x * n.y - n.x * q.y
-                        }
-                        const bboxArea = (maxX - minX) * (maxY - minY)
-                        win.lasso = bboxArea > 2500 && Math.abs(area) / 2 > bboxArea * 0.35
-                    }
-                    if (win.lasso) {
-                        let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
-                        for (let q of pts) { minX = Math.min(minX, q.x); minY = Math.min(minY, q.y); maxX = Math.max(maxX, q.x); maxY = Math.max(maxY, q.y) }
-                        win.sel = Qt.rect(minX, minY, maxX - minX, maxY - minY)
-                    } else {
-                        win.sel = direct
-                    }
+                    win.sel = win.rectFromPoints(win.pressPos, p)
                     break
                 }
                 case "move":
@@ -593,8 +609,6 @@ Window {
                 } else {
                     win.dragKind = "new"
                     if (win.phase !== "idle") win.clearSelection()
-                    win.lassoPoints = [Qt.point(mouse.x, mouse.y)]
-                    win.lasso = false
                 }
             }
 
@@ -616,13 +630,6 @@ Window {
                         return
                     }
                     if (win.sel.width < 8 || win.sel.height < 8) { win.clearSelection(); return }
-                    if (win.lasso) {
-                        // Snap the scribble's bounding box to a padded rectangle.
-                        const pad = 6
-                        snapAnim.from = win.sel
-                        snapAnim.to = win.clampRect(Qt.rect(win.sel.x - pad, win.sel.y - pad, win.sel.width + 2 * pad, win.sel.height + 2 * pad))
-                        snapAnim.restart()
-                    }
                     win.finishRegion(true)
                 } else if (kind === "move" || kind.startsWith("resize-")) {
                     win.finishRegion(false)
