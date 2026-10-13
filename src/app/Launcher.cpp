@@ -280,17 +280,18 @@ void Launcher::searchWeb(const QString &text)
     Q_EMIT openUrl(SearchEngines::current(&m_config).searchUrlFor(text), text);
 }
 
-void Launcher::askAbout(const QImage &image, const QString &text)
+void Launcher::askAbout(const QImage &image, const QString &contextText)
 {
     newChat();
     if (!image.isNull()) {
         m_attachmentImage = image;
         m_images->setAttachment(image);
         m_attachmentUrl = QStringLiteral("image://launcher/attach/%1").arg(++m_attachmentGen);
-        Q_EMIT attachmentChanged();
     }
+    m_contextText = contextText.trimmed();
+    Q_EMIT attachmentChanged();
     setMode(QStringLiteral("ai"));
-    m_query = text;
+    m_query.clear();
     Q_EMIT queryChanged();
     show();
 }
@@ -299,22 +300,27 @@ void Launcher::askAi(const QString &text)
 {
     if (!aiEnabled())
         return;
-    const QString question = text.trimmed().isEmpty() && !m_attachmentImage.isNull()
-        ? tr("What is this? Explain briefly.")
-        : text.trimmed();
+    const bool hasContext = !m_attachmentImage.isNull() || !m_contextText.isEmpty();
+    const QString question = text.trimmed().isEmpty() && hasContext ? tr("What is this? Explain briefly.") : text.trimmed();
     if (question.isEmpty())
         return;
     setMode(QStringLiteral("ai"));
-    AiMessage user{AiMessage::User, question, {}};
+    // Recognised/selected text grounds the model (small VLMs misread text).
+    QString prompt = question;
+    if (!m_contextText.isEmpty())
+        prompt += QStringLiteral("\n\n") + (m_attachmentImage.isNull() ? tr("Selected text:") : tr("Text recognised in the image:"))
+            + QStringLiteral("\n\"\"\"\n") + m_contextText + QStringLiteral("\n\"\"\"");
+    AiMessage user{AiMessage::User, prompt, {}};
     if (!m_attachmentImage.isNull())
         user.images << m_attachmentImage;
-    appendMessage(QStringLiteral("user"), question, m_attachmentUrl);
+    appendMessage(QStringLiteral("user"), question, m_attachmentUrl, m_contextText);
     if (m_thread.messages.isEmpty())
         m_thread.append(AiMessage{AiMessage::System, QString::fromUtf8(kSystemPrompt), {}});
     m_thread.append(user);
     // The image is sent with the message it belongs to; follow-ups reuse the thread.
     m_attachmentImage = QImage();
     m_attachmentUrl.clear();
+    m_contextText.clear();
     Q_EMIT attachmentChanged();
     m_query.clear();
     Q_EMIT queryChanged();
@@ -391,10 +397,11 @@ QVariantList Launcher::threads() const
 
 void Launcher::removeAttachment()
 {
-    if (m_attachmentUrl.isEmpty() && m_attachmentImage.isNull())
+    if (m_attachmentUrl.isEmpty() && m_attachmentImage.isNull() && m_contextText.isEmpty())
         return;
     m_attachmentImage = QImage();
     m_attachmentUrl.clear();
+    m_contextText.clear();
     Q_EMIT attachmentChanged();
 }
 
@@ -416,10 +423,11 @@ void Launcher::openSettings()
     Q_EMIT settingsRequested();
 }
 
-void Launcher::appendMessage(const QString &role, const QString &text, const QString &image)
+void Launcher::appendMessage(const QString &role, const QString &text, const QString &image, const QString &quote)
 {
     m_messages << QVariantMap{{QStringLiteral("role"), role}, {QStringLiteral("text"), text},
-                              {QStringLiteral("image"), image}, {QStringLiteral("streaming"), role == QLatin1String("assistant")}};
+                              {QStringLiteral("image"), image}, {QStringLiteral("quote"), quote},
+                              {QStringLiteral("streaming"), role == QLatin1String("assistant")}};
     Q_EMIT messagesChanged();
 }
 

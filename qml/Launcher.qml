@@ -110,7 +110,7 @@ Window {
                 // Attached lens image
                 Rectangle {
                     id: chip
-                    visible: win.launcher.attachment !== ""
+                    visible: win.launcher.attachment !== "" || win.launcher.contextText !== ""
                     anchors { left: modeIcon.right; leftMargin: 12; verticalCenter: parent.verticalCenter }
                     width: visible ? 44 : 0
                     height: 36
@@ -118,6 +118,15 @@ Window {
                     color: Qt.rgba(1, 1, 1, 0.06)
                     border.color: Qt.rgba(1, 1, 1, 0.12)
                     clip: true
+                    // Text-only context: a quote mark
+                    Icon {
+                        visible: win.launcher.attachment === ""
+                        anchors.centerIn: parent
+                        name: "text-cursor-input"; size: 18; color: win.fg
+                    }
+                    ToolTip.visible: chipHover.hovered && win.launcher.contextText !== ""
+                    ToolTip.text: win.launcher.contextText.length > 300 ? win.launcher.contextText.substring(0, 300) + "…" : win.launcher.contextText
+                    HoverHandler { id: chipHover }
                     Image {
                         anchors.fill: parent
                         anchors.margins: 1
@@ -138,7 +147,7 @@ Window {
                     id: input
                     anchors { left: chip.visible ? chip.right : modeIcon.right; leftMargin: 12; right: buttons.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
                     text: win.launcher.query
-                    placeholderText: win.aiMode ? (win.launcher.attachment !== "" ? qsTr("Ask about this selection…") : qsTr("Ask anything…"))
+                    placeholderText: win.aiMode ? (win.launcher.attachment !== "" || win.launcher.contextText !== "" ? qsTr("Ask about this selection…") : qsTr("Ask anything…"))
                                                 : qsTr("Search apps, files and the web")
                     placeholderTextColor: "#6f7383"
                     color: win.fg
@@ -316,7 +325,7 @@ Window {
                     Rectangle {
                         id: bubble
                         x: msg.mine ? msg.width - width - 20 : 20
-                        width: msg.mine ? Math.min(msg.width * 0.75, Math.max(measure.implicitWidth, msg.modelData.image ? 220 : 0) + 30) : msg.width - 40
+                        width: msg.mine ? Math.min(msg.width * 0.75, Math.max(measure.implicitWidth, msg.modelData.image || msg.modelData.quote ? 260 : 0) + 30) : msg.width - 40
                         height: bodyCol.implicitHeight + (msg.mine ? 20 : 8)
                         radius: 16
                         color: msg.mine ? Qt.rgba(1, 1, 1, 0.07) : msg.error ? Qt.rgba(1, 0.35, 0.35, 0.10) : "transparent"
@@ -333,6 +342,17 @@ Window {
                                 height: visible ? Math.min(140, width * (implicitHeight / Math.max(1, implicitWidth))) : 0
                                 fillMode: Image.PreserveAspectFit
                                 horizontalAlignment: Image.AlignLeft
+                            }
+                            Text {
+                                visible: !!msg.modelData.quote && !msg.modelData.image
+                                width: parent.width
+                                text: "“" + (msg.modelData.quote || "") + "”"
+                                color: win.fgDim
+                                font.pixelSize: 12
+                                font.italic: true
+                                elide: Text.ElideRight
+                                maximumLineCount: 3
+                                wrapMode: Text.Wrap
                             }
                             TextEdit {
                                 width: parent.width
@@ -476,7 +496,7 @@ Window {
             else win.launcher.searchWeb(input.text)
         } else if (event.key === Qt.Key_N && (event.modifiers & Qt.ControlModifier)) {
             win.launcher.newChat()
-        } else if (event.key === Qt.Key_Backspace && input.text.length === 0 && win.launcher.attachment !== "") {
+        } else if (event.key === Qt.Key_Backspace && input.text.length === 0 && (win.launcher.attachment !== "" || win.launcher.contextText !== "")) {
             win.launcher.removeAttachment()
         } else {
             return

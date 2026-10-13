@@ -51,6 +51,7 @@ class Launcher : public QObject {
     Q_PROPERTY(bool aiEnabled READ aiEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QString engineName READ engineName NOTIFY settingsChanged)
     Q_PROPERTY(QString attachment READ attachment NOTIFY attachmentChanged)
+    Q_PROPERTY(QString contextText READ contextText NOTIFY attachmentChanged)
     Q_PROPERTY(QVariantList threads READ threads NOTIFY threadsChanged)
     Q_PROPERTY(QColor accent READ accent NOTIFY settingsChanged)
 public:
@@ -72,11 +73,13 @@ public:
     bool aiEnabled() const;
     QString engineName() const;
     QString attachment() const { return m_attachmentUrl; }
+    QString contextText() const { return m_contextText; }
     QVariantList threads() const;
     QColor accent() const;
 
-    // Opens in AI mode with an image (from the lens) and optional text.
-    void askAbout(const QImage &image, const QString &text);
+    // Opens in AI mode with an image and/or text from the lens. The text
+    // (recognised or selected) is sent as context with the next question.
+    void askAbout(const QImage &image, const QString &contextText);
 
     Q_INVOKABLE void show();
     Q_INVOKABLE void hide();
@@ -112,7 +115,7 @@ Q_SIGNALS:
 
 private:
     void onResults(const QList<LauncherItem> &items, quint64 generation);
-    void appendMessage(const QString &role, const QString &text, const QString &image = {});
+    void appendMessage(const QString &role, const QString &text, const QString &image = {}, const QString &quote = {});
     void setLastAssistantText(const QString &text, bool streaming);
     void saveThread();
 
@@ -134,6 +137,7 @@ private:
     QVariantList m_messages;
     QImage m_attachmentImage;
     QString m_attachmentUrl;
+    QString m_contextText;
     int m_attachmentGen = 0;
     QString m_streamText;
     QTimer m_streamFlush;

@@ -82,7 +82,7 @@ Item {
                     IconButton {
                         iconName: "languages"
                         busy: root.translating
-                        tip: root.translated ? qsTr("Show original") : qsTr("Translate")
+                        tip: root.translated ? qsTr("Show original  (T)") : qsTr("Translate  (T)")
                         onClicked: root.translate()
                     }
                     AbstractLangButton {
@@ -94,13 +94,13 @@ Item {
             }
             IconButton {
                 iconName: "sparkles"
-                tip: qsTr("Ask AI about this")
+                tip: qsTr("Ask AI about this  (A)")
                 onClicked: root.ask()
             }
             IconButton {
                 visible: !root.textMode
                 iconName: "download"
-                tip: qsTr("Save image")
+                tip: qsTr("Save image  (Ctrl+S)")
                 onClicked: root.save()
             }
         }

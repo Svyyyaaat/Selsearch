@@ -606,6 +606,8 @@ Window {
                 if (win.hasSel || win.isTextSel) win.doSearch()
             } else if (event.key === Qt.Key_T && event.modifiers === Qt.NoModifier) {
                 if (win.hasSel || win.isTextSel) win.doTranslate(); else win.translateAll()
+            } else if (event.key === Qt.Key_A && event.modifiers === Qt.NoModifier) {
+                if (win.hasSel || win.isTextSel) win.doAsk()
             } else if (event.matches(StandardKey.Save)) {
                 if (win.hasSel) win.lens.saveImage(win.lensScreen.name, win.sel)
             } else {
