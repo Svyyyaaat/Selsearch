@@ -9,6 +9,8 @@
 #include <unicode/brkiter.h>
 #include <unicode/locid.h>
 #include <unicode/unistr.h>
+#elif defined(SELSEARCH_HAVE_WINDOWS_ICU)
+#include <icu.h>  // Windows 10 1903+: the C API of the system's icu.dll
 #endif
 
 namespace selsearch {
@@ -141,6 +143,18 @@ static QList<Segment> wordSegments(const QString &text)
             out << Segment{start, end - start, it->getRuleStatus() != UBRK_WORD_NONE};
         return out;
     }
+#elif defined(SELSEARCH_HAVE_WINDOWS_ICU)
+    UErrorCode status = U_ZERO_ERROR;
+    UBreakIterator *it = ubrk_open(UBRK_WORD, "ja", reinterpret_cast<const UChar *>(text.utf16()), int32_t(text.size()), &status);
+    if (U_SUCCESS(status) && it) {
+        int32_t start = ubrk_first(it);
+        for (int32_t end = ubrk_next(it); end != UBRK_DONE; start = end, end = ubrk_next(it))
+            out << Segment{start, end - start, ubrk_getRuleStatus(it) != UBRK_WORD_NONE};
+        ubrk_close(it);
+        return out;
+    }
+    if (it)
+        ubrk_close(it);
 #endif
     // Fallback (UAX #29): katakana runs stay together, kanji split per character.
     QTextBoundaryFinder finder(QTextBoundaryFinder::Word, text);

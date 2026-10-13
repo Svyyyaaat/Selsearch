@@ -83,6 +83,12 @@ KDE/GNOME: add custom shortcuts running the same commands (capture goes through
 the xdg-desktop-portal Screenshot API there; GNOME has no layer-shell, so the
 overlay is best on wlroots compositors and KDE).
 
+**Windows 10/11**: run the installer or unzip `Selsearch-windows-x64.zip` (CI
+artifacts) and start `selsearchd.exe`. It registers its own hotkeys (Alt+Space,
+Alt+Shift+S, Alt+Shift+T; the `shortcuts.*` config keys), sits in the tray and
+can start with Windows. Building and the differences from Linux:
+[docs/BUILDING-windows.md](docs/BUILDING-windows.md).
+
 On first start Selsearch opens a short welcome page; `selsearch config` opens
 the settings. Every option is also a key in `~/.config/selsearch/config.toml`.
 

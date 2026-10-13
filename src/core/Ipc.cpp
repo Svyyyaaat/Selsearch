@@ -6,16 +6,25 @@
 #include <QLocalSocket>
 #include <QPointer>
 
+#ifndef Q_OS_WIN
 #include <unistd.h>
+#endif
 
 namespace selsearch {
 
 QString ipcSocketPath()
 {
+#ifdef Q_OS_WIN
+    // QLocalServer turns this into the pipe \\.\pipe\selsearch-<user>.
+    QString user = qEnvironmentVariable("USERNAME");
+    user.remove(QLatin1Char('\\'));
+    return QStringLiteral("selsearch-") + (user.isEmpty() ? QStringLiteral("user") : user);
+#else
     const QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
     if (!runtime.isEmpty())
         return runtime + QStringLiteral("/selsearch.sock");
     return QStringLiteral("/tmp/selsearch-%1.sock").arg(getuid());
+#endif
 }
 
 IpcServer::IpcServer(QObject *parent)
@@ -28,7 +37,14 @@ IpcServer::IpcServer(QObject *parent)
 bool IpcServer::listen(QString *error)
 {
     const QString path = ipcSocketPath();
-    if (QFile::exists(path)) {
+#ifdef Q_OS_WIN
+    // Pipe names are not files, and Windows lets a second server create
+    // another instance of the same pipe: always probe for a running daemon.
+    const bool mayBeRunning = true;
+#else
+    const bool mayBeRunning = QFile::exists(path);
+#endif
+    if (mayBeRunning) {
         QLocalSocket probe;
         probe.connectToServer(path);
         if (probe.waitForConnected(300)) {

@@ -219,6 +219,10 @@ QString ImageSearch::buildHtml(const QByteArray &jpeg, const Engine &engine)
 QString ImageSearch::outputDir()
 {
     QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
+#ifdef Q_OS_WIN
+    if (runtime.isEmpty() || !QFileInfo(runtime).isDir())
+        runtime = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+#endif
     if (runtime.isEmpty() || !QFileInfo(runtime).isDir())
         runtime = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     return runtime + QStringLiteral("/selsearch");

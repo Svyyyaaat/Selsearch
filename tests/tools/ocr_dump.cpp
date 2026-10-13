@@ -21,10 +21,32 @@
 
 #include <cstdio>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <psapi.h>
+#else
 #include <sys/resource.h>
+#endif
 
 using namespace selsearch;
 
+#ifdef Q_OS_WIN
+static long maxRssKb()
+{
+    PROCESS_MEMORY_COUNTERS pmc = {};
+    pmc.cb = sizeof pmc;
+    GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof pmc);
+    return long(pmc.PeakWorkingSetSize / 1024);
+}
+
+static double cpuMs()
+{
+    FILETIME created, exited, kernel, user;
+    GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user);
+    auto ms = [](const FILETIME &t) { return double((quint64(t.dwHighDateTime) << 32) | t.dwLowDateTime) / 1e4; };
+    return ms(kernel) + ms(user);
+}
+#else
 static long maxRssKb()
 {
     rusage ru{};
@@ -38,6 +60,7 @@ static double cpuMs()
     getrusage(RUSAGE_SELF, &ru);
     return (ru.ru_utime.tv_sec + ru.ru_stime.tv_sec) * 1e3 + (ru.ru_utime.tv_usec + ru.ru_stime.tv_usec) / 1e3;
 }
+#endif
 
 static QJsonArray rectJson(const QRectF &r)
 {

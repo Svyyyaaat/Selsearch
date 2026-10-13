@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: MIT
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: 6.8.3
+  ONNXRUNTIME_VERSION: 1.23.2
+  ECM_VERSION: v6.16.0          # extra-cmake-modules, for building layer-shell-qt
+  LAYER_SHELL_QT_VERSION: v6.4.5
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build pkg-config libgl-dev libegl-dev libxkbcommon-dev \
+            libwayland-dev wayland-protocols libicu-dev \
+            libtesseract-dev libleptonica-dev
+
+      - name: Qt
+        uses: jurplel/install-qt-action@v4.1.1
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtshadertools qtwebengine qtwebchannel qtpositioning
+          cache: true
+
+      # Ubuntu's layer-shell-qt is Qt 5; build the Qt 6 one like the dev setup
+      # (/opt/kde): extra-cmake-modules, then layer-shell-qt.
+      - name: layer-shell-qt
+        run: |
+          git clone --depth 1 --branch "$ECM_VERSION" https://invent.kde.org/frameworks/extra-cmake-modules.git /tmp/ecm
+          cmake -S /tmp/ecm -B /tmp/ecm/build -G Ninja -DCMAKE_INSTALL_PREFIX=/opt/kde -DBUILD_TESTING=OFF -DBUILD_HTML_DOCS=OFF -DBUILD_MAN_DOCS=OFF -DBUILD_QTHELP_DOCS=OFF
+          cmake --build /tmp/ecm/build
+          sudo cmake --install /tmp/ecm/build
+          git clone --depth 1 --branch "$LAYER_SHELL_QT_VERSION" https://invent.kde.org/plasma/layer-shell-qt.git /tmp/lsq
+          cmake -S /tmp/lsq -B /tmp/lsq/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/kde -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR;/opt/kde" -DBUILD_TESTING=OFF
+          cmake --build /tmp/lsq/build
+          sudo cmake --install /tmp/lsq/build
+
+      - name: ONNX Runtime
+        run: |
+          curl -sSL -o /tmp/ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz"
+          sudo mkdir -p /opt/onnxruntime
+          sudo tar -xzf /tmp/ort.tgz -C /opt/onnxruntime --strip-components=1
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR;/opt/kde;/opt/onnxruntime"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+          LD_LIBRARY_PATH: /opt/kde/lib:/opt/kde/lib/x86_64-linux-gnu:/opt/onnxruntime/lib
+        run: ctest --test-dir build --output-on-failure
+
+  windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+
+      - name: Qt
+        uses: jurplel/install-qt-action@v4.1.1
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtwebengine qtwebchannel qtpositioning qtshadertools
+          cache: true
+
+      - name: ONNX Runtime
+        run: |
+          $zip = "$env:RUNNER_TEMP\onnxruntime.zip"
+          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v$env:ONNXRUNTIME_VERSION/onnxruntime-win-x64-$env:ONNXRUNTIME_VERSION.zip" -OutFile $zip
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP"
+          "ORT_DIR=$env:RUNNER_TEMP\onnxruntime-win-x64-$env:ONNXRUNTIME_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR;$env:ORT_DIR"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Stage
+        run: |
+          $stage = "$env:GITHUB_WORKSPACE\staging"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          foreach ($exe in 'selsearchd.exe', 'selsearch.exe', 'selsearch-web.exe') {
+            if (Test-Path "build\bin\$exe") { Copy-Item "build\bin\$exe" $stage }
+          }
+          Copy-Item "$env:ORT_DIR\lib\onnxruntime.dll" $stage
+          Copy-Item LICENSE "$stage\LICENSE.txt"
+          # Qt DLLs, QML modules, plugins, QtWebEngine and the MSVC runtime.
+          windeployqt --release --qmldir qml --compiler-runtime --no-translations --dir $stage "$stage\selsearchd.exe"
+          if (Test-Path "$stage\selsearch-web.exe") {
+            windeployqt --release --qmldir qml\web --compiler-runtime --no-translations --dir $stage "$stage\selsearch-web.exe"
+          }
+          Compress-Archive -Path "$stage\*" -DestinationPath Selsearch-windows-x64.zip
+
+      - name: Installer
+        run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(selsearch VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+          $iscc = if ($iscc) { $iscc.Source } else { "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$env:GITHUB_WORKSPACE\staging" packaging\windows\selsearch.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Selsearch-windows-x64
+          path: Selsearch-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Selsearch-windows-x64-setup
+          path: packaging/windows/Selsearch-*-setup.exe

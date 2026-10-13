@@ -13,6 +13,7 @@ namespace selsearch {
 
 class Config;
 class FrameStore;
+class GlobalShortcuts;
 class Launcher;
 class Settings;
 class WebPanel;
@@ -20,6 +21,9 @@ class IpcServer;
 class LensController;
 class OcrService;
 class Translator;
+#ifdef Q_OS_WIN
+class WindowsTray;
+#endif
 
 class App : public QObject {
     Q_OBJECT
@@ -37,6 +41,10 @@ public:
 private:
     void handle(const QJsonObject &request, const std::function<void(const QJsonObject &)> &reply);
     QJsonObject status() const;
+    // Registers the shortcuts.* keys with the platform (in-app on Windows,
+    // the GlobalShortcuts portal elsewhere; a no-op on wlroots compositors).
+    void applyShortcuts();
+    void onShortcut(const QString &id);
 
     std::unique_ptr<Config> m_config;
     std::unique_ptr<IpcServer> m_ipc;
@@ -48,6 +56,10 @@ private:
     std::unique_ptr<Launcher> m_launcher;
     std::unique_ptr<Settings> m_settings;
     std::unique_ptr<WebPanel> m_web;
+    std::unique_ptr<GlobalShortcuts> m_shortcuts;
+#ifdef Q_OS_WIN
+    std::unique_ptr<WindowsTray> m_tray;
+#endif
 };
 
 }  // namespace selsearch

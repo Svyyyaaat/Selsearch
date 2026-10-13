@@ -17,6 +17,11 @@ namespace selsearch {
 QString UsageStore::defaultPath()
 {
     QString state = qEnvironmentVariable("XDG_STATE_HOME");
+#ifdef Q_OS_WIN
+    // %LOCALAPPDATA%, next to the config and models.
+    if (state.isEmpty() || !QDir::isAbsolutePath(state))
+        state = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+#endif
     if (state.isEmpty() || !QDir::isAbsolutePath(state))
         state = QDir::homePath() + QStringLiteral("/.local/state");
     return state + QStringLiteral("/selsearch/usage.json");

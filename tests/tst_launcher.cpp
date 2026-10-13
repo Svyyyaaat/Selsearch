@@ -181,6 +181,9 @@ private Q_SLOTS:
 
     void terminalAndDetach()
     {
+#ifdef Q_OS_WIN
+        QSKIP("terminals and systemd-run are Linux-only");
+#endif
         const QByteArray saved = qgetenv("TERMINAL");
         qputenv("TERMINAL", "/bin/sh");
         auto htop = desktopentry::parseFile(kApps + QStringLiteral("/htop.desktop"), QStringLiteral("htop.desktop"), QStringLiteral("C"));
@@ -723,6 +726,9 @@ private Q_SLOTS:
 
     void engineEndToEnd()
     {
+#ifdef Q_OS_WIN
+        QSKIP("finds the test apps through XDG_DATA_DIRS; Windows reads the Start Menu");
+#endif
         QTemporaryDir tmp;
         touch(tmp.filePath(QStringLiteral("home/Documents/quarterly-report.txt")));
         qputenv("XDG_DATA_HOME", tmp.filePath(QStringLiteral("nodata")).toUtf8());

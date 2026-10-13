@@ -11,7 +11,7 @@ namespace selsearch {
 
 struct WindowInfo {
     QString title;
-    QString appId;   // Wayland app_id / Hyprland class
+    QString appId;   // Wayland app_id / Hyprland class / Windows exe name
     QRect geometry;  // logical, global layout coordinates
     bool focused = false;
     bool floating = false;
@@ -30,7 +30,9 @@ public:
 };
 
 // Hyprland ($HYPRLAND_INSTANCE_SIGNATURE), sway ($SWAYSOCK), or nullptr.
+// On Windows: the desktop's top-level windows (EnumWindows).
 std::unique_ptr<Compositor> createCompositor();
+std::unique_ptr<Compositor> createWindowsCompositor();  // GUI thread only
 
 // Exposed for tests: parse Hyprland's `j/clients` + `j/monitors` replies.
 QList<WindowInfo> parseHyprlandWindows(const QByteArray &clientsJson, const QByteArray &monitorsJson);

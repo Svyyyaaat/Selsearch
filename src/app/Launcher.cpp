@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "Launcher.h"
 
+#include "WindowPlacement.h"
+
 #include "core/Accent.h"
 #include "core/Config.h"
 #include "launcher/LauncherEngine.h"
@@ -15,7 +17,9 @@
 #include <QQmlEngine>
 #include <QQuickWindow>
 
-#include <LayerShellQt/Window>
+#ifdef Q_OS_WIN
+#include "launcher/WindowsApps.h"
+#endif
 
 Q_LOGGING_CATEGORY(lcLauncher, "selsearch.launcher")
 
@@ -46,6 +50,16 @@ QImage LauncherImages::requestImage(const QString &id, QSize *size, const QSize 
         img = m_attachment;
     } else if (id.startsWith(QLatin1String("icon/"))) {
         const QString name = id.mid(5);
+#ifdef Q_OS_WIN
+        // Start Menu shortcuts and files: the shell's icon ("winicon:<hex path>").
+        if (winshell::isIconId(name)) {
+            img = winshell::shellIcon(winshell::iconPath(name), want);
+            if (size)
+                *size = img.size();
+            if (!img.isNull())
+                return img;
+        }
+#endif
         QIcon icon = name.startsWith(QLatin1Char('/')) ? QIcon(name) : QIcon::fromTheme(name);
         if (icon.isNull())
             icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
@@ -126,17 +140,15 @@ void Launcher::setEngine(QQmlEngine *engine)
         delete obj;
         return;
     }
-    if (auto *layer = LayerShellQt::Window::get(m_window)) {
-        // Full-screen transparent layer: clicks outside the card close it and
-        // the compositor puts it on the focused output.
-        layer->setLayer(LayerShellQt::Window::LayerTop);
-        layer->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop | LayerShellQt::Window::AnchorBottom
-                                                        | LayerShellQt::Window::AnchorLeft | LayerShellQt::Window::AnchorRight));
-        layer->setExclusiveZone(-1);
-        layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
-        layer->setScreenConfiguration(LayerShellQt::Window::ScreenFromCompositor);
-        layer->setScope(QStringLiteral("selsearch-launcher"));
-    }
+    setupLauncherWindow(m_window);
+#ifdef Q_OS_WIN
+    // A plain window can lose focus without a click on our transparent
+    // backdrop (Alt+Tab, the Start menu): close like a popup then.
+    connect(m_window, &QWindow::activeChanged, this, [this] {
+        if (m_shown && !m_window->isActive())
+            hide();
+    });
+#endif
 }
 
 QString Launcher::aiModel() const
@@ -184,8 +196,9 @@ void Launcher::show()
         m_shown = true;
         Q_EMIT shownChanged();
     }
+    placeLauncherWindow(m_window);
     m_window->show();
-    m_window->requestActivate();
+    activateWindow(m_window);
     Q_EMIT focusInput();
     if (m_mode == QLatin1String("search"))
         setQuery(m_query);  // refresh (e.g. most-used apps for an empty query)

@@ -8,6 +8,8 @@
 
 #include <memory>
 
+class QScreen;
+
 namespace selsearch {
 
 // A frozen image of one output, upright, in physical pixels.
@@ -43,11 +45,17 @@ public:
 
 // Picks the best backend for the running session:
 // ext-image-copy-capture-v1 / wlr-screencopy (Hyprland, sway, river, niri, ...),
-// then xdg-desktop-portal Screenshot (GNOME, KDE).
+// then xdg-desktop-portal Screenshot (GNOME, KDE). On Windows: GDI.
 // `forced` may name one of: "wayland", "portal".
 std::unique_ptr<CaptureBackend> createCaptureBackend(const QString &forced = {});
 
 std::unique_ptr<CaptureBackend> createWaylandCaptureBackend();
 std::unique_ptr<CaptureBackend> createPortalCaptureBackend();
+std::unique_ptr<CaptureBackend> createWindowsCaptureBackend();
+
+// The name a screen goes by in Selsearch: QScreen::name(), with " (2)", " (3)"
+// appended to repeats. Wayland connector names are unique, but Windows reports
+// the monitor model, which two identical monitors share. Call on the GUI thread.
+QString screenName(QScreen *screen);
 
 }  // namespace selsearch

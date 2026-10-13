@@ -51,6 +51,10 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace selsearch {
 namespace {
 
@@ -449,8 +453,14 @@ private:
         opts.DisableMemPattern();
         // Do not leave worker threads spinning after a run.
         opts.AddConfigEntry("session.intra_op.allow_spinning", "0");
+#ifdef _WIN32
+        // ORTCHAR_T is wchar_t on Windows.
+        const std::wstring p = path.toStdWString();
+        return std::make_unique<Ort::Session>(ortEnv(), p.c_str(), opts);
+#else
         const QByteArray p = QFile::encodeName(path);
         return std::make_unique<Ort::Session>(ortEnv(), p.constData(), opts);
+#endif
     }
 
     bool ensureSessions(const QStringList &languages, QString &error)
@@ -638,6 +648,10 @@ private:
         std::mutex errorMutex;
         std::exception_ptr error;
         auto worker = [&] {
+#ifdef _WIN32
+            // Linux threads inherit the OCR thread's nice value; Windows ones do not.
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+#endif
             for (;;) {
                 const size_t b = next++;
                 if (b >= batches.size())

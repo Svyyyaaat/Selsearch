@@ -107,12 +107,14 @@ bool launchDetached(const QStringList &argv, const QString &workingDir, const QS
         dir = QDir::homePath() + dir.mid(1);
     proc.setWorkingDirectory(!dir.isEmpty() && QFileInfo(dir).isDir() ? dir : QDir::homePath());
     proc.setStandardInputFile(QProcess::nullDevice());
+#ifdef Q_OS_UNIX
     // New session so the app does not share our process group or controlling
     // terminal, and no inherited fds or signal dispositions leak into it.
     proc.setUnixProcessParameters(QProcess::UnixProcessFlag::CreateNewSession
                                   | QProcess::UnixProcessFlag::ResetSignalHandlers
                                   | QProcess::UnixProcessFlag::CloseFileDescriptors
                                   | QProcess::UnixProcessFlag::IgnoreSigPipe);
+#endif
     if (!proc.startDetached()) {
         if (error)
             *error = proc.errorString();
