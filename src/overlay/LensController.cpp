@@ -35,7 +35,6 @@ namespace {
 
 struct SessionGrab {
     CaptureResult capture;
-    QHash<QString, QImage> blurred;
     QList<WindowInfo> windows;
 };
 
@@ -85,11 +84,6 @@ LensScreen::LensScreen(QScreen *screen, QObject *parent)
 QString LensScreen::frameUrl() const
 {
     return QStringLiteral("image://frame/%1/%2").arg(m_name).arg(m_generation);
-}
-
-QString LensScreen::blurUrl() const
-{
-    return QStringLiteral("image://frame/%1/%2/blur").arg(m_name).arg(m_generation);
 }
 
 qreal LensScreen::toLogical() const
@@ -241,9 +235,6 @@ void LensController::start(const QString &mode)
     auto future = QtConcurrent::run([backend, compositor, layout, snap] {
         SessionGrab g;
         g.capture = backend->grabAll(layout);
-        // Blur in parallel with window-list IPC; both are cheap.
-        for (const auto &o : std::as_const(g.capture.outputs))
-            g.blurred.insert(o.name, FrameStore::makeBlurred(o.image));
         if (compositor && snap)
             g.windows = compositor->visibleWindows();
         return g;
@@ -266,14 +257,12 @@ void LensController::start(const QString &mode)
             for (const auto &o : g.capture.outputs)
                 if (o.name == s->name() || (g.capture.outputs.size() == 1 && m_screens.size() == 1))
                     frame = o.image;
-            QImage blurred = g.blurred.value(s->name());
             if (frame.isNull()) {
                 // Unknown output (e.g. portal without names): show black, still usable.
                 frame = QImage(s->screen()->geometry().size(), QImage::Format_RGB32);
                 frame.fill(Qt::black);
-                blurred = frame;
             }
-            m_frames->set(s->name(), frame, blurred);
+            m_frames->set(s->name(), frame);
             s->m_generation = m_generation;
             s->m_frameSize = frame.size();
             s->m_words.clear();

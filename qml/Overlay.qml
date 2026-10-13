@@ -14,7 +14,8 @@ Window {
     title: "Selsearch"
 
     // ---- theme ----------------------------------------------------------------
-    readonly property string themeName: lens.theme
+    // "signal" (dot field, default), "mono" (plain darkening), "aurora".
+    readonly property string themeName: lens.theme === "glass" ? "signal" : lens.theme
     readonly property color accent: lens.accent
     readonly property color rimA: themeName === "aurora" ? accent : "white"
     readonly property color rimB: themeName === "aurora" ? Qt.hsla((accent.hslHue + 0.42) % 1, accent.hslSaturation, accent.hslLightness, 1) : rimA
@@ -25,7 +26,8 @@ Window {
     property rect sel: Qt.rect(0, 0, 0, 0)
     property real selRadius: 18
     property real focusAmt: 0
-    property real sweep: -1
+    property real wave: -1
+    property real time: 0
     property bool lasso: false
     property var lassoPoints: []
     property point pressPos
@@ -67,7 +69,7 @@ Window {
         textAnchor = -1
         textFocus = -1
         focusAnim.stop(); focusAmt = 0
-        sweepAnim.stop(); sweep = -1
+        waveAnim.stop(); wave = -1
         if (translated) { lens.clearTranslations(lensScreen.name); translated = false }
         langMenu.close()
     }
@@ -183,7 +185,7 @@ Window {
         lens.activeScreen = lensScreen.name
         if (animated) {
             radiusAnim.restart()
-            sweepAnim.restart()
+            waveAnim.restart()
         }
         focusAnim.to = 1
         focusAnim.restart()
@@ -239,8 +241,14 @@ Window {
     // ---- animations -------------------------------------------------------------
     NumberAnimation { id: focusAnim; target: win; property: "focusAmt"; to: 1; duration: 260; easing.type: Easing.OutCubic }
     NumberAnimation { id: radiusAnim; target: win; property: "selRadius"; from: 6; to: 18; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
-    NumberAnimation { id: sweepAnim; target: win; property: "sweep"; from: 0; to: 1; duration: 900; easing.type: Easing.InOutSine
-        onFinished: win.sweep = -1 }
+    NumberAnimation { id: waveAnim; target: win; property: "wave"; from: 0; to: 1; duration: 1100; easing.type: Easing.OutCubic
+        onFinished: win.wave = -1 }
+    // Clock for the dot shimmer / scan line; runs only while the lens is up.
+    NumberAnimation on time {
+        running: win.visible && win.themeName !== "mono"
+        from: 0; to: 3600; duration: 3600 * 1000
+        loops: Animation.Infinite
+    }
     // Lasso → rectangle "snap"
     PropertyAnimation { id: snapAnim; target: win; property: "sel"; duration: 360; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
 
@@ -258,34 +266,28 @@ Window {
             cache: false
             smooth: true
         }
-        Image {
-            id: blurredFrame
-            visible: false
-            source: win.lensScreen.blurUrl
-            asynchronous: false
-            cache: false
-            smooth: true
-        }
 
         ShaderEffect {
             id: backdrop
             anchors.fill: parent
             property variant source: frame
-            property variant blurred: blurredFrame
             property vector4d sel: Qt.vector4d(win.sel.x, win.sel.y, win.sel.width, win.sel.height)
             property vector2d size: Qt.vector2d(width, height)
             property real radius: win.isTextSel ? 0 : win.selRadius
             property real hasSel: win.hasSel && !win.isTextSel ? 1 : 0
             property real focusAmt: win.focusAmt
-            property real blurMix: win.themeName === "mono" ? 0 : 1
-            property real idleDim: win.themeName === "mono" ? 0.28 : 0.18
-            property real dim: win.themeName === "mono" ? 0.55 : 0.36
+            property real idleDim: win.themeName === "mono" ? 0.28 : 0.22
+            property real dim: win.themeName === "mono" ? 0.55 : 0.5
             property real rimAlpha: win.phase === "drawing" ? 0.75 : 0.95
             property real rimWidth: win.themeName === "aurora" ? 2.0 : 1.5
-            property real sweep: win.sweep
+            property real wave: win.wave
+            property real time: win.time
+            property real dots: win.themeName === "mono" ? 0 : 1
+            property real spacing: 9
             property real tintMix: win.themeName === "aurora" ? 0.14 : 0
             property color rimColor: win.rimA
             property color rimColor2: win.rimB
+            property color dotColor: win.themeName === "aurora" ? win.rimB : win.accent
             fragmentShader: "qrc:/shaders/glass.frag.qsb"
         }
 

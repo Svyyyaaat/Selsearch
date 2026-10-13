@@ -32,7 +32,6 @@ class LensScreen : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString name READ name CONSTANT)
     Q_PROPERTY(QString frameUrl READ frameUrl NOTIFY frameChanged)
-    Q_PROPERTY(QString blurUrl READ blurUrl NOTIFY frameChanged)
     Q_PROPERTY(QSize frameSize READ frameSize NOTIFY frameChanged)
     Q_PROPERTY(QVariantList words READ words NOTIFY wordsChanged)
     Q_PROPERTY(QVariantList windows READ windows NOTIFY windowsChanged)
@@ -46,7 +45,6 @@ public:
     QScreen *screen() const { return m_screen; }
     QString name() const { return m_name; }
     QString frameUrl() const;
-    QString blurUrl() const;
     QSize frameSize() const { return m_frameSize; }
     QVariantList words() const { return m_words; }
     QVariantList windows() const { return m_windows; }

@@ -231,8 +231,8 @@ ApplicationWindow {
             spacing: 0
             ChoiceRow {
                 title: qsTr("Lens style"); key: "general.theme"
-                subtitle: qsTr("Glass blurs and dims everything outside the selection. Mono only dims. Aurora tints with two hues of your accent.")
-                options: [{ id: "glass", name: qsTr("Glass") }, { id: "mono", name: qsTr("Mono") }, { id: "aurora", name: qsTr("Aurora") }]
+                subtitle: qsTr("Signal darkens the screen and lights a dot field around your selection. Mono only darkens. Aurora tints with two hues of your accent.")
+                options: [{ id: "signal", name: qsTr("Signal") }, { id: "mono", name: qsTr("Mono") }, { id: "aurora", name: qsTr("Aurora") }]
             }
             TextRow {
                 title: qsTr("Accent colour"); key: "general.accent"

@@ -62,6 +62,12 @@ int main(int argc, char **argv)
     wl_display_roundtrip(dpy);
     if (!mgr) { fprintf(stderr, "no virtual pointer manager\n"); return 1; }
     ptr = zwlr_virtual_pointer_manager_v1_create_virtual_pointer(mgr, seat);
+    // The compositor drops the first event of a new device: send a no-op
+    // relative motion and give it a moment.
+    zwlr_virtual_pointer_v1_motion(ptr, now(), 0, 0);
+    zwlr_virtual_pointer_v1_frame(ptr);
+    wl_display_roundtrip(dpy);
+    usleep(50000);
     for (int i = 3; i < argc; ++i) {
         const char *c = argv[i];
         if (!strcmp(c, "move")) { double x = atof(argv[++i]), y = atof(argv[++i]); move(x, y); }

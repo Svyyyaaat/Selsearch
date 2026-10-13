@@ -23,7 +23,7 @@ const QVariantMap &Config::defaults()
 {
     static const QVariantMap d = {
         // Appearance
-        {QStringLiteral("general.theme"), QStringLiteral("glass")},  // glass | mono | aurora
+        {QStringLiteral("general.theme"), QStringLiteral("signal")},  // signal | mono | aurora
         {QStringLiteral("general.accent"), QString()},                // "#rrggbb", empty = built-in palette
         {QStringLiteral("general.follow_portal_accent"), false},
         {QStringLiteral("general.color_scheme"), QStringLiteral("auto")},  // auto | light | dark
