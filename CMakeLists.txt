@@ -141,7 +141,7 @@ endif()
 
 install(TARGETS selsearchd selsearch RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 configure_file(packaging/selsearch.service.in ${CMAKE_CURRENT_BINARY_DIR}/selsearch.service @ONLY)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/selsearch.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/selsearch.service DESTINATION lib/systemd/user)
 install(FILES packaging/selsearch.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 
 if(SELSEARCH_BUILD_TESTS)
