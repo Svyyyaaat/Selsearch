@@ -65,6 +65,13 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("ai.api_key_env"), QString()},  // read the key from this env var instead
         {QStringLiteral("ai.history"), true},
 
+        // Shortcuts (Qt key-sequence syntax). Applied in-app on Windows and
+        // through the GlobalShortcuts portal (KDE/GNOME); on Hyprland/sway
+        // they feed the generated compositor config.
+        {QStringLiteral("shortcuts.launcher"), QStringLiteral("Alt+Space")},
+        {QStringLiteral("shortcuts.lens"), QStringLiteral("Meta+S")},
+        {QStringLiteral("shortcuts.lens_text"), QStringLiteral("Meta+Shift+S")},
+
         // Launcher
         {QStringLiteral("launcher.apps"), true},
         {QStringLiteral("launcher.files"), true},

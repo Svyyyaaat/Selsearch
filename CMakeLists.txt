@@ -52,7 +52,11 @@ file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     src/launcher/*.cpp src/launcher/*.h
     src/translate/*.cpp src/translate/*.h
     src/ai/*.cpp src/ai/*.h
-    src/search/*.cpp src/search/*.h)
+    src/search/*.cpp src/search/*.h
+    src/platform/GlobalShortcuts.cpp src/platform/*.h)
+if(UNIX)
+    list(APPEND CORE_SOURCES src/platform/PortalShortcuts.cpp)
+endif()
 
 add_library(selsearch_core STATIC ${CORE_SOURCES} ${PROTOCOL_SOURCES})
 target_include_directories(selsearch_core PUBLIC
