@@ -13,6 +13,25 @@ ApplicationWindow {
     minimumHeight: 420
     title: qsTr("Selsearch Settings")
     color: "#121317"
+    palette {
+        window: "#121317"
+        windowText: "#eceef4"
+        base: "#1b1c21"
+        alternateBase: "#202127"
+        text: "#eceef4"
+        button: "#23252b"
+        buttonText: "#eceef4"
+        highlight: "#8e9bff"
+        highlightedText: "#14151a"
+        placeholderText: "#6f7383"
+        mid: "#2c2e35"
+        midlight: "#33353d"
+        dark: "#0e0f12"
+        light: "#3a3c44"
+        shadow: "#000000"
+        toolTipBase: "#23252b"
+        toolTipText: "#eceef4"
+    }
 
     readonly property color fg: "#eceef4"
     readonly property color fgDim: "#9a9eab"
@@ -340,8 +359,25 @@ ApplicationWindow {
         id: sw
         property string key
         Switch {
+            id: toggle
             checked: !!win.val(sw.key)
             onToggled: win.set(sw.key, checked)
+            indicator: Rectangle {
+                implicitWidth: 44
+                implicitHeight: 24
+                x: toggle.leftPadding
+                y: (toggle.height - height) / 2
+                radius: 12
+                color: toggle.checked ? win.accent : "#2c2e35"
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Rectangle {
+                    x: toggle.checked ? parent.width - width - 3 : 3
+                    y: 3
+                    width: 18; height: 18; radius: 9
+                    color: toggle.checked ? "#14151a" : "#9a9eab"
+                    Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                }
+            }
         }
     }
 
