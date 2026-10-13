@@ -37,6 +37,8 @@ ApplicationWindow {
     readonly property color fgDim: "#9a9eab"
     readonly property color line: Qt.rgba(1, 1, 1, 0.07)
     readonly property color accent: "#8e9bff"
+    // Windows: hotkeys are registered in-app, so no compositor snippet.
+    readonly property bool isWindows: Qt.platform.os === "windows"
     property int page: 0
     // Bumped on every config change so bindings re-read values.
     property int rev: 0
@@ -152,8 +154,12 @@ ApplicationWindow {
             WelcomeStep {
                 number: 1
                 title: qsTr("Bind the shortcuts")
-                body: qsTr("Add these lines to ~/.config/hypr/hyprland.lua (other compositors: see Shortcuts).")
+                body: win.isWindows
+                      ? qsTr("Selsearch listens for these keys itself: %1 opens the launcher, %2 searches the screen, %3 selects text. Change them under Shortcuts or in the config file.")
+                            .arg(win.val("shortcuts.launcher")).arg(win.val("shortcuts.lens")).arg(win.val("shortcuts.lens_text"))
+                      : qsTr("Add these lines to ~/.config/hypr/hyprland.lua (other compositors: see Shortcuts).")
                 Column {
+                    visible: !win.isWindows
                     width: parent.width
                     spacing: 8
                     Rectangle {
@@ -278,7 +284,10 @@ ApplicationWindow {
                 }
             }
             SwitchRow { title: qsTr("Follow the desktop accent colour"); key: "general.follow_portal_accent"
-                subtitle: qsTr("Reads the accent from xdg-desktop-portal when your desktop provides one (GNOME, KDE). Falls back to the colour above.") }
+                subtitle: win.isWindows ? qsTr("Uses the accent colour from Windows settings.")
+                                        : qsTr("Reads the accent from xdg-desktop-portal when your desktop provides one (GNOME, KDE). Falls back to the colour above.") }
+            SwitchRow { title: qsTr("Start with Windows"); key: "general.autostart"; visible: win.isWindows
+                subtitle: qsTr("Runs Selsearch in the background after you sign in, so the shortcuts work right away.") }
         }
     }
 

@@ -404,11 +404,14 @@ private Q_SLOTS:
         QCOMPARE(fi.absolutePath(), tmp.path() + QStringLiteral("/selsearch"));
         QVERIFY(fi.fileName().startsWith(QLatin1String("imgsearch-")));
         QVERIFY(fi.fileName().endsWith(QLatin1String(".html")));
+#ifndef Q_OS_WIN  // NTFS has ACLs; the per-user temp dir is private anyway
         QCOMPARE(fi.permissions() & (QFile::ReadGroup | QFile::WriteGroup | QFile::ReadOther | QFile::WriteOther), QFile::Permissions());
+#endif
         QVERIFY(fi.permissions() & QFile::ReadOwner);
         QFile f(fi.absoluteFilePath());
         QVERIFY(f.open(QIODevice::ReadOnly));
         const QString html = QString::fromUtf8(f.readAll());
+        f.close();  // Windows cannot delete open files (cleanup below)
         QVERIFY(html.contains(QLatin1String("encoded_image")));
         // Downscaled: the embedded JPEG is 1000x750.
         const QString b64 = QRegularExpression(QStringLiteral("var B64 = \"([A-Za-z0-9+/=]+)\"")).match(html).captured(1);

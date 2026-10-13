@@ -186,6 +186,9 @@ private:
 
 std::unique_ptr<Compositor> createCompositor()
 {
+#ifdef Q_OS_WIN
+    return createWindowsCompositor();
+#endif
     const QByteArray his = qgetenv("HYPRLAND_INSTANCE_SIGNATURE");
     if (!his.isEmpty()) {
         const QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");

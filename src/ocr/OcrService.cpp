@@ -7,9 +7,13 @@
 #include <QStandardPaths>
 #include <QtConcurrent>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#else
 #include <sys/resource.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#endif
 
 namespace selsearch {
 
@@ -95,7 +99,12 @@ QFuture<OcrResult> OcrService::recognize(const QImage &image, const QStringList 
         // Run (and spawn the engine's helper threads) at low CPU priority so
         // the overlay keeps animating smoothly while text is recognised.
         static thread_local bool niced = [] {
+#ifdef Q_OS_WIN
+            // Threads do not inherit this on Windows; PaddleOcr lowers its own.
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+#else
             setpriority(PRIO_PROCESS, pid_t(syscall(SYS_gettid)), 10);
+#endif
             return true;
         }();
         (void)niced;

@@ -531,6 +531,9 @@ private Q_SLOTS:
 
     void bergamotTranslateWithPivot()
     {
+#ifdef Q_OS_WIN
+        QSKIP("the fake translateLocally is a shell script");
+#endif
         FakeTranslateLocally fake;
         BergamotTranslator berg;
         QVERIFY(!berg.executable().isEmpty());
@@ -665,6 +668,8 @@ private Q_SLOTS:
             QVERIFY(!r->ok());
         }
         // 3. translateLocally with a route -> bergamot, even with the others up.
+        // (The fake translateLocally is a shell script: not on Windows.)
+#ifndef Q_OS_WIN
         {
             FakeTranslateLocally fake;
             config.setValue(QStringLiteral("translate.libretranslate_url"), libreServer.url());
@@ -680,6 +685,7 @@ private Q_SLOTS:
             QVERIFY(r2 && r2->ok());
             QCOMPARE(r2->backend, QStringLiteral("libretranslate"));
         }
+#endif
         // 4. Nothing available.
         {
             NoTranslateLocally noBergamot;

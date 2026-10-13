@@ -103,8 +103,25 @@ package, run `ln -s lib ~/onnxruntime-linux-x64-1.23.2/lib64` and
 
 ## Windows
 
-Coming with the Windows port: download `Selsearch-windows-x64.zip` (or the
-installer) from the latest build, unpack, run `selsearchd.exe`.
+Windows 10 (1809+) or 11, x64.
+
+1. Open the repository's **Actions** tab → latest successful **build** run →
+   *Artifacts*, and download either
+   - `Selsearch-windows-x64-setup` (installer: Start Menu entry, uninstaller), or
+   - `Selsearch-windows-x64` (portable zip: unpack anywhere).
+2. Run `selsearchd.exe` (the installer offers to start it). A tray icon appears;
+   right-click it for the launcher, screen search, Settings and Quit.
+3. In Settings → Appearance, turn on **Start with Windows**.
+
+Default keys on Windows: **Alt+Space** launcher, **Alt+Shift+S** search the
+screen, **Alt+Shift+T** select text. (Win+S and Win+Shift+S belong to
+Windows Search and the Snipping Tool, and Windows won't hand them to an app.)
+While Selsearch runs, Alt+Space no longer opens a window's system menu, the
+same as with PowerToys Run; pick another key in Settings if you need it.
+
+Settings, models and history live in `%LOCALAPPDATA%\selsearch\`.
+Building it yourself (MSVC, or cross-compiling from Linux):
+[docs/BUILDING-windows.md](docs/BUILDING-windows.md).
 
 ## First run
 
@@ -122,7 +139,8 @@ On first start a welcome page opens (later: `selsearch config`).
    [translateLocally](https://translatelocally.com) or run a
    [LibreTranslate](https://libretranslate.com) server.
 
-Everything is also in `~/.config/selsearch/config.toml`.
+Everything is also in `~/.config/selsearch/config.toml`
+(`%LOCALAPPDATA%\selsearch\config.toml` on Windows).
 
 ## Shortcuts
 
@@ -130,7 +148,7 @@ Change them in **Settings → Shortcuts**: click one and press the new keys.
 
 | Desktop | How they take effect |
 |---|---|
-| Windows | Immediately, Selsearch registers them itself. |
+| Windows | Immediately: Selsearch registers them itself. If another program already holds a key, Settings keeps it and the log says `not registered`. |
 | KDE Plasma, GNOME 48+ | The desktop asks once to confirm; you can also change them in its keyboard settings. |
 | Hyprland, sway | The compositor owns global keys: copy the generated snippet from Settings into its config. |
 | Others (niri, river, …) | Bind `selsearch launcher`, `selsearch lens`, `selsearch lens --text`. |

@@ -3,10 +3,15 @@
 
 #include "Config.h"
 
+#ifdef Q_OS_WIN
+#include <QGuiApplication>
+#include <QPalette>
+#else
 #include <QDBusArgument>
 #include <QDBusInterface>
 #include <QDBusReply>
 #include <QDBusVariant>
+#endif
 
 #include <optional>
 
@@ -17,6 +22,16 @@ QColor defaultAccent()
     return QColor(QStringLiteral("#8e9bff"));
 }
 
+#ifdef Q_OS_WIN
+// The accent from Windows Settings > Personalisation > Colours.
+static std::optional<QColor> portalAccent()
+{
+    if (!qGuiApp)
+        return std::nullopt;
+    const QColor c = QGuiApplication::palette().color(QPalette::Accent);
+    return c.isValid() ? std::optional<QColor>(c) : std::nullopt;
+}
+#else
 static std::optional<QColor> portalAccent()
 {
     static std::optional<std::optional<QColor>> cached;
@@ -43,6 +58,7 @@ static std::optional<QColor> portalAccent()
     cached = result;
     return result;
 }
+#endif
 
 QColor accentColor(const Config &config)
 {
