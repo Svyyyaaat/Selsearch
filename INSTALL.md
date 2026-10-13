@@ -21,7 +21,16 @@ can't sit above everything there.
 
 ### Fedora
 
-Fedora 41 or newer (Qt 6.8+):
+**Ready-made package (Fedora 43):** download `selsearch-*.fc43.x86_64.rpm`
+from the [latest release](https://github.com/svyyyaaat/selsearch/releases), then
+
+```sh
+sudo dnf install ./selsearch-*.fc43.x86_64.rpm
+systemctl --user enable --now selsearch.service
+selsearch config
+```
+
+**From source** (Fedora 41 or newer, Qt 6.8+):
 
 ```sh
 sudo dnf install git gcc-c++ cmake ninja-build pkgconf-pkg-config \
@@ -105,10 +114,13 @@ package, run `ln -s lib ~/onnxruntime-linux-x64-1.23.2/lib64` and
 
 Windows 10 (1809+) or 11, x64.
 
-1. Open the repository's **Actions** tab → latest successful **build** run →
-   *Artifacts*, and download either
-   - `Selsearch-windows-x64-setup` (installer: Start Menu entry, uninstaller), or
-   - `Selsearch-windows-x64` (portable zip: unpack anywhere).
+1. From the [latest release](https://github.com/svyyyaaat/selsearch/releases)
+   download either
+   - `Selsearch-<version>-windows-x64-setup.exe` (installer: Start Menu entry, uninstaller), or
+   - `Selsearch-windows-x64.zip` (portable: unpack anywhere).
+
+   Builds of every commit are also under the repository's **Actions** tab →
+   a **build** run → *Artifacts*.
 2. Run `selsearchd.exe` (the installer offers to start it). A tray icon appears;
    right-click it for the launcher, screen search, Settings and Quit.
 3. In Settings → Appearance, turn on **Start with Windows**.
