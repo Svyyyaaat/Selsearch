@@ -57,7 +57,7 @@ Window {
             id: bg
             anchors.fill: parent
             radius: 24
-            color: Qt.rgba(0.085, 0.088, 0.105, 0.97)
+            color: "#16171b"
             border.color: Qt.rgba(1, 1, 1, 0.08)
             layer.enabled: true
             layer.effect: MultiEffect {
@@ -186,7 +186,7 @@ Window {
                 id: list
                 visible: !win.aiMode && count > 0
                 width: parent.width
-                height: visible ? Math.min(contentHeight + 16, 460) : 0
+                height: visible ? Math.min(contentHeight + 16, Math.max(320, win.height * 0.6)) : 0
                 topMargin: 8
                 bottomMargin: 8
                 clip: true
@@ -306,10 +306,17 @@ Window {
                     width: ListView.view.width
                     height: bubble.height
 
+                    // Natural width of the user's text, to size their bubble.
+                    Text {
+                        id: measure
+                        visible: false
+                        text: msg.modelData.text
+                        font.pixelSize: 14
+                    }
                     Rectangle {
                         id: bubble
                         x: msg.mine ? msg.width - width - 20 : 20
-                        width: msg.mine ? Math.min(msg.width * 0.75, bodyCol.implicitWidth + 28) : msg.width - 40
+                        width: msg.mine ? Math.min(msg.width * 0.75, Math.max(measure.implicitWidth, msg.modelData.image ? 220 : 0) + 30) : msg.width - 40
                         height: bodyCol.implicitHeight + (msg.mine ? 20 : 8)
                         radius: 16
                         color: msg.mine ? Qt.rgba(1, 1, 1, 0.07) : msg.error ? Qt.rgba(1, 0.35, 0.35, 0.10) : "transparent"

@@ -78,12 +78,13 @@ bool App::init(QString *error)
 
     connect(m_lens.get(), &LensController::askRequested, this, [this](const QImage &image, const QString &text) {
         if (text == QLatin1String("selsearch:image-search")) {
-            QString error;
-            const QUrl page = ImageSearch::prepare(image, m_config->string(QStringLiteral("search.image_engine")), &error);
-            if (page.isValid())
-                openUrl(page, tr("Image search"));
-            else
-                qCWarning(lcApp) << "image search failed:" << error;
+            ImageSearch::start(image, m_config->string(QStringLiteral("search.image_engine")), this,
+                               [this](const QUrl &url, const QString &error) {
+                                   if (url.isValid())
+                                       openUrl(url, tr("Image search"));
+                                   else
+                                       qCWarning(lcApp) << "image search failed:" << error;
+                               });
             return;
         }
         m_launcher->askAbout(image, text);

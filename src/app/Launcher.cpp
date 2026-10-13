@@ -238,13 +238,16 @@ void Launcher::onResults(const QList<LauncherItem> &items, quint64 generation)
             icon = QStringLiteral("image://icon/") + icon.mid(7) + QStringLiteral("?color=%23e6e8ef");
         else if (!icon.isEmpty())
             icon = QStringLiteral("image://launcher/icon/") + icon;
+        QVariantList actions;
+        for (const auto &a : it.actions)
+            actions << QVariantMap{{QStringLiteral("id"), a.id}, {QStringLiteral("title"), a.title}};
         rows << QVariantMap{{QStringLiteral("index"), i},
                             {QStringLiteral("title"), it.title},
                             {QStringLiteral("subtitle"), it.subtitle},
                             {QStringLiteral("group"), it.group},
                             {QStringLiteral("icon"), icon},
                             {QStringLiteral("kind"), int(it.kind)},
-                            {QStringLiteral("actions"), it.data.value(QStringLiteral("actions"))}};
+                            {QStringLiteral("actions"), actions}};
     }
     m_results = rows;
     Q_EMIT resultsChanged();
