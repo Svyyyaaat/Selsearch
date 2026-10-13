@@ -32,6 +32,8 @@ class Settings : public QObject {
     Q_PROPERTY(QString version READ version CONSTANT)
     Q_PROPERTY(QString configPath READ configPath CONSTANT)
     Q_PROPERTY(bool welcome READ welcome NOTIFY welcomeChanged)
+    // "inapp" (Windows), "portal" (KDE/GNOME), "hyprland", "sway", "other"
+    Q_PROPERTY(QString shortcutMode READ shortcutMode CONSTANT)
 public:
     Settings(Config &config, OcrService &ocr, QObject *parent = nullptr);
     void setEngine(QQmlEngine *engine);
@@ -58,6 +60,11 @@ public:
     Q_INVOKABLE void downloadOcrModels();
     Q_INVOKABLE void openConfigFile();
     Q_INVOKABLE QString hyprlandSnippet() const;
+    Q_INVOKABLE QString swaySnippet() const;
+    QString shortcutMode() const;
+    // Key recorder helpers: Qt key + modifiers → "Meta+Shift+S"; display form.
+    Q_INVOKABLE QString sequenceFor(int key, int modifiers) const;
+    Q_INVOKABLE QString displayKeys(const QString &sequence) const;
     Q_INVOKABLE void copy(const QString &text);
 
 Q_SIGNALS:

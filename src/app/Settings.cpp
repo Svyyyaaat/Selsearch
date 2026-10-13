@@ -4,6 +4,7 @@
 #include "core/Config.h"
 #include "ocr/ModelStore.h"
 #include "ocr/OcrService.h"
+#include "platform/KeyNames.h"
 #include "search/ImageSearch.h"
 #include "search/SearchEngines.h"
 #include "translate/TranslationLanguages.h"
@@ -236,19 +237,72 @@ void Settings::openConfigFile()
     QDesktopServices::openUrl(QUrl::fromLocalFile(m_config.path()));
 }
 
+QString Settings::shortcutMode() const
+{
+#ifdef Q_OS_WIN
+    return QStringLiteral("inapp");
+#else
+    if (qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE"))
+        return QStringLiteral("hyprland");
+    if (qEnvironmentVariableIsSet("SWAYSOCK"))
+        return QStringLiteral("sway");
+    const QString desktop = qEnvironmentVariable("XDG_CURRENT_DESKTOP").toLower();
+    if (desktop.contains(QLatin1String("kde")) || desktop.contains(QLatin1String("gnome")))
+        return QStringLiteral("portal");
+    return QStringLiteral("other");
+#endif
+}
+
+QString Settings::sequenceFor(int key, int modifiers) const
+{
+    const auto mods = Qt::KeyboardModifiers(modifiers) & (Qt::ControlModifier | Qt::AltModifier | Qt::ShiftModifier | Qt::MetaModifier);
+    return QKeySequence(QKeyCombination(mods, Qt::Key(key))).toString(QKeySequence::PortableText);
+}
+
+QString Settings::displayKeys(const QString &sequence) const
+{
+    return toDisplayKeys(QKeySequence(sequence, QKeySequence::PortableText));
+}
+
+static QKeySequence shortcutKeys(const Config &c, const char *key)
+{
+    return QKeySequence(c.string(QString::fromLatin1(key)), QKeySequence::PortableText);
+}
+
 QString Settings::hyprlandSnippet() const
 {
-    return QStringLiteral(
-        "-- Selsearch (Hyprland 0.55+, ~/.config/hypr/hyprland.lua)\n"
-        "hl.bind(\"ALT + Space\", hl.dsp.exec_cmd(\"selsearch launcher\"))\n"
-        "hl.bind(\"SUPER + S\", hl.dsp.exec_cmd(\"selsearch lens\"))\n"
-        "hl.bind(\"SUPER + SHIFT + S\", hl.dsp.exec_cmd(\"selsearch lens --text\"))\n"
+    QString s = QStringLiteral("-- Selsearch (Hyprland 0.55+, ~/.config/hypr/hyprland.lua)\n");
+    const auto bind = [&](const char *key, const char *cmd) {
+        const QString keys = toHyprlandKeys(shortcutKeys(m_config, key));
+        if (!keys.isEmpty())
+            s += QStringLiteral("hl.bind(\"%1\", hl.dsp.exec_cmd(\"%2\"))\n").arg(keys, QString::fromLatin1(cmd));
+    };
+    bind("shortcuts.launcher", "selsearch launcher");
+    bind("shortcuts.lens", "selsearch lens");
+    bind("shortcuts.lens_text", "selsearch lens --text");
+    s += QStringLiteral(
         "-- Selsearch's surfaces use these layer namespaces, so your layer animations\n"
         "-- apply to them: selsearch-lens, selsearch-launcher, selsearch-results.\n"
         "-- Optional, to make the lens appear instantly instead:\n"
         "-- hl.layer_rule({ match = { namespace = \"selsearch-lens\" }, name = \"selsearch-lens\", no_anim = true })\n"
         "-- Start the daemon with the session (skip if you enabled selsearch.service).\n"
         "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"selsearchd\") end)\n");
+    return s;
+}
+
+QString Settings::swaySnippet() const
+{
+    QString s = QStringLiteral("# Selsearch (sway / i3-style config)\n");
+    const auto bind = [&](const char *key, const char *cmd) {
+        const QString keys = toSwayKeys(shortcutKeys(m_config, key));
+        if (!keys.isEmpty())
+            s += QStringLiteral("bindsym %1 exec %2\n").arg(keys, QString::fromLatin1(cmd));
+    };
+    bind("shortcuts.launcher", "selsearch launcher");
+    bind("shortcuts.lens", "selsearch lens");
+    bind("shortcuts.lens_text", "selsearch lens --text");
+    s += QStringLiteral("exec selsearchd\n");
+    return s;
 }
 
 void Settings::copy(const QString &text)

@@ -53,7 +53,7 @@ file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     src/translate/*.cpp src/translate/*.h
     src/ai/*.cpp src/ai/*.h
     src/search/*.cpp src/search/*.h
-    src/platform/GlobalShortcuts.cpp src/platform/*.h)
+    src/platform/GlobalShortcuts.cpp src/platform/KeyNames.cpp src/platform/*.h)
 if(UNIX)
     list(APPEND CORE_SOURCES src/platform/PortalShortcuts.cpp)
 endif()
