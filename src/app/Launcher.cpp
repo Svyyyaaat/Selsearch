@@ -178,6 +178,8 @@ void Launcher::show()
 {
     if (!m_window)
         return;
+    if (!aiEnabled() && m_mode == QLatin1String("ai"))
+        setMode(QStringLiteral("search"));
     if (!m_shown) {
         m_shown = true;
         Q_EMIT shownChanged();

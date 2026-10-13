@@ -651,7 +651,8 @@ private Q_SLOTS:
             QCOMPARE(r->backend, QStringLiteral("libretranslate"));
             QCOMPARE(r->segments, QStringList{QStringLiteral("LT")});
         }
-        // 2. LibreTranslate down, AI enabled -> llm.
+        // 2. LibreTranslate down, AI enabled -> still no AI: "auto" never
+        //    uses the model (the lens then falls back to a web translator).
         {
             NoTranslateLocally noBergamot;
             config.setValue(QStringLiteral("translate.libretranslate_url"),
@@ -661,9 +662,7 @@ private Q_SLOTS:
             auto t = createTranslator(config);
             const auto r = run(*t, {{QStringLiteral("Hello world")}, QString(), QStringLiteral("de")});
             QVERIFY(r.has_value());
-            QVERIFY2(r->ok(), qPrintable(r->error));
-            QCOMPARE(r->backend, QStringLiteral("llm"));
-            QCOMPARE(r->segments, QStringList{QStringLiteral("LLM")});
+            QVERIFY(!r->ok());
         }
         // 3. translateLocally with a route -> bergamot, even with the others up.
         {

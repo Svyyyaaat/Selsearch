@@ -60,11 +60,18 @@ target_include_directories(selsearch_core PUBLIC
     ${PROTO_OUT}
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tomlplusplus)
 target_link_libraries(selsearch_core PUBLIC
-    Qt6::Core Qt6::Gui Qt6::Network Qt6::DBus Qt6::Concurrent
+    Qt6::Core Qt6::Gui Qt6::Network Qt6::DBus Qt6::Concurrent Qt6::Qml
     PkgConfig::WAYLAND_CLIENT)
 target_compile_definitions(selsearch_core PUBLIC
     SELSEARCH_VERSION="${PROJECT_VERSION}"
     QT_NO_KEYWORDS)
+
+# ICU: dictionary-based word breaks for Chinese/Japanese OCR results.
+pkg_check_modules(ICU IMPORTED_TARGET icu-uc icu-i18n)
+if(ICU_FOUND)
+    target_link_libraries(selsearch_core PUBLIC PkgConfig::ICU)
+    target_compile_definitions(selsearch_core PUBLIC SELSEARCH_HAVE_ICU=1)
+endif()
 
 if(SELSEARCH_WITH_ONNX)
     find_package(onnxruntime QUIET)

@@ -18,7 +18,7 @@ layout(std140, binding = 0) uniform buf {
     float rimAlpha;  // base rim opacity
     float rimWidth;  // rim thickness in pixels
     float wave;      // 0..1 progress of the release ripple, < 0 = off
-    float time;      // seconds, drives shimmer / scan
+    float time;      // seconds, drives shimmer / edge glow
     float dots;      // 0 = no dot field (mono), 1 = full
     float spacing;   // dot grid pitch in pixels
     float tintMix;   // aurora: tint of the darkened area
@@ -71,14 +71,16 @@ void main()
         // light up as units.
         float dd = hasSel > 0.5 ? sdRoundRect(cc - c, sel.zw * 0.5, r) : 1e6;
 
-        float base = 0.06;                                   // faint grid everywhere
         float shimmer = 0.6 + 0.4 * sin(time * 2.2 + h * 2.0 * PI);
-        float intensity = base * shimmer;
+        float intensity = 0.0;
 
-        // Idle: a slow scan line moving down the screen.
-        float scanY = mod(time * 140.0, size.y + 300.0) - 150.0;
-        float scan = exp(-pow((cc.y - scanY) / 46.0, 2.0)) * (1.0 - focusAmt);
-        intensity += scan * 0.55;
+        // Edge glow: dots light up along the screen border, with soft bright
+        // bands travelling around it. Leaves the middle of the screen clear.
+        float edgeDist = min(min(cc.x, cc.y), min(size.x - cc.x, size.y - cc.y));
+        float edge = exp(-edgeDist / (spacing * 5.0));
+        float around = atan(cc.y - 0.5 * size.y, cc.x - 0.5 * size.x);
+        float bands = 0.5 + 0.5 * sin(around * 3.0 - time * 0.9);
+        intensity += edge * (0.3 + 0.75 * bands * bands) * shimmer * (1.0 - 0.45 * focusAmt);
 
         if (hasSel > 0.5 && dd > 0.0) {
             // Halo hugging the selection edge.

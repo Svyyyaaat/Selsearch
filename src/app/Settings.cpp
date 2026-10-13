@@ -30,6 +30,11 @@ Settings::Settings(Config &config, OcrService &ocr, QObject *parent)
     , m_config(config)
     , m_ocr(ocr)
 {
+    // Keep the OCR status live while languages/engine are edited.
+    connect(&m_config, &Config::changed, this, [this](const QString &key) {
+        if (key.startsWith(QLatin1String("ocr.")))
+            Q_EMIT ocrStatusChanged();
+    });
     connect(&m_ai, &AiClient::modelsListed, this, [this](const QStringList &models) {
         m_aiModels = models;
         m_aiStatus = models.isEmpty() ? tr("Connected, but the server lists no models.")
@@ -81,18 +86,57 @@ QVariantList Settings::languages() const
     return out;
 }
 
+static QString modelLabel(const QString &id)
+{
+    if (id.startsWith(QLatin1String("eslav")))
+        return QObject::tr("Russian/Ukrainian/Belarusian");
+    if (id.startsWith(QLatin1String("cyrillic")))
+        return QObject::tr("Cyrillic");
+    if (id.startsWith(QLatin1String("latin")))
+        return QObject::tr("Latin-script");
+    if (id.startsWith(QLatin1String("PP-OCRv5_mobile_rec")))
+        return QObject::tr("Chinese/Japanese/English");
+    return id.section(QLatin1Char('_'), 0, 0);
+}
+
 QString Settings::ocrStatus() const
 {
     if (m_ocrDownloading)
-        return m_ocrProgress.isEmpty() ? tr("Downloading models…") : m_ocrProgress;
-    const QStringList engines = m_ocr.availableEngines();
-    const QStringList missing = ModelStore().missingFor(effectiveOcrLanguages(m_config));
-    if (engines.contains(QLatin1String("paddle")) && missing.isEmpty())
-        return tr("PP-OCRv5 ready for %1").arg(effectiveOcrLanguages(m_config).join(QStringLiteral(", ")));
-    if (!missing.isEmpty())
-        return tr("PP-OCRv5 models missing for your languages (%1). Tesseract is used meanwhile.")
-            .arg(effectiveOcrLanguages(m_config).join(QStringLiteral(", ")));
-    return engines.isEmpty() ? tr("No OCR engine available") : tr("Using %1").arg(engines.join(QStringLiteral(", ")));
+        return m_ocrProgress.isEmpty() ? tr("Downloading…") : m_ocrProgress;
+    const QStringList langs = effectiveOcrLanguages(m_config);
+    const QString langText = langs.join(QStringLiteral(", "));
+    ModelStore store;
+    const QStringList missing = store.missingFor(langs);
+    const QString rec = ModelStore::bestRecognitionModel(langs);
+    QString line;
+    if (missing.isEmpty()) {
+        line = tr("✓ Installed. Reading %1 with the %2 model.").arg(langText, modelLabel(rec));
+    } else {
+        qint64 bytes = 0;
+        for (const QString &id : missing)
+            if (const ModelSpec *spec = ModelStore::findSpec(id))
+                for (const auto &f : spec->files)
+                    bytes += f.size;
+        line = tr("Not installed for %1 — Download fetches %2 MB. Until then Tesseract is used.")
+                   .arg(langText).arg(qMax<qint64>(1, bytes / 1048576));
+    }
+    // One recognition model per scan: say which languages it won't cover.
+    if (const ModelSpec *spec = ModelStore::findSpec(rec)) {
+        QStringList uncovered;
+        for (const QString &l : langs)
+            if (!spec->languages.contains(l))
+                uncovered << l;
+        if (!uncovered.isEmpty())
+            line += QLatin1Char(' ') + tr("Note: %1 needs a different model; put the language you scan most first.").arg(uncovered.join(QStringLiteral(", ")));
+    }
+    if (!m_ocrProgress.isEmpty())
+        line += QLatin1Char(' ') + m_ocrProgress;  // last error
+    return line;
+}
+
+bool Settings::ocrInstalled() const
+{
+    return ModelStore().missingFor(effectiveOcrLanguages(m_config)).isEmpty();
 }
 
 QString Settings::version() const
@@ -164,10 +208,12 @@ void Settings::downloadOcrModels()
     m_ocrDownloading = true;
     Q_EMIT ocrStatusChanged();
     connect(store, &ModelStore::progress, this, [this](qint64 received, qint64 total) {
-        m_ocrProgress = total > 0 ? tr("Downloading models… %1 / %2 MB").arg(received / 1048576).arg(total / 1048576)
-                                  : tr("Downloading models…");
+        m_ocrProgress = total > 0 ? tr("Downloading… %1 / %2 MB").arg(received / 1048576.0, 0, 'f', 1).arg(total / 1048576.0, 0, 'f', 1)
+                                  : tr("Downloading…");
+        m_ocrFraction = total > 0 ? double(received) / double(total) : 0.0;
         Q_EMIT ocrStatusChanged();
     });
+    m_ocrProgress.clear();
     connect(store, &ModelStore::finished, this, [this, store] {
         m_ocrDownloading = false;
         m_ocrProgress.clear();
@@ -176,7 +222,7 @@ void Settings::downloadOcrModels()
     });
     connect(store, &ModelStore::failed, this, [this, store](const QString &error) {
         m_ocrDownloading = false;
-        m_ocrProgress = error;
+        m_ocrProgress = tr("Download failed: %1").arg(error);
         Q_EMIT ocrStatusChanged();
         store->deleteLater();
     });

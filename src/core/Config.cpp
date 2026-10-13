@@ -2,6 +2,7 @@
 #include "Config.h"
 
 #include <QDir>
+#include <QJSValue>
 #include <QFile>
 #include <QFileInfo>
 #include <QLocale>
@@ -49,7 +50,8 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("ocr.unload_after_s"), 60},              // 0 = keep loaded
 
         // Translation
-        {QStringLiteral("translate.backend"), QStringLiteral("auto")},  // auto | bergamot | libretranslate | llm
+        {QStringLiteral("translate.backend"), QStringLiteral("auto")},  // auto | web | bergamot | libretranslate | llm
+        {QStringLiteral("translate.web_service"), QStringLiteral("google")},  // google | deepl (backend "web", or auto fallback)
         {QStringLiteral("translate.target"), QString()},                // empty = system language
         {QStringLiteral("translate.libretranslate_url"), QStringLiteral("http://localhost:5000")},
         {QStringLiteral("translate.libretranslate_key"), QString()},
@@ -195,8 +197,14 @@ QVariant Config::value(const QString &key) const
     return defaults().value(key);
 }
 
-void Config::setValue(const QString &key, const QVariant &value)
+void Config::setValue(const QString &key, const QVariant &input)
 {
+    // Values from QML arrive wrapped in QJSValue (e.g. a JS array of strings).
+    QVariant value = input;
+    if (value.metaType() == QMetaType::fromType<QJSValue>())
+        value = value.value<QJSValue>().toVariant();
+    if (value.typeId() == QMetaType::QVariantList)
+        value = value.toStringList();
     const QStringList parts = key.split(QLatin1Char('.'));
     toml::table *t = &d->table;
     for (int i = 0; i < parts.size() - 1; ++i) {

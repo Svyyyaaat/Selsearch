@@ -27,6 +27,8 @@ class Settings : public QObject {
     Q_PROPERTY(QString aiStatus READ aiStatus NOTIFY aiStatusChanged)
     Q_PROPERTY(QString ocrStatus READ ocrStatus NOTIFY ocrStatusChanged)
     Q_PROPERTY(bool ocrDownloading READ ocrDownloading NOTIFY ocrStatusChanged)
+    Q_PROPERTY(bool ocrInstalled READ ocrInstalled NOTIFY ocrStatusChanged)
+    Q_PROPERTY(double ocrFraction READ ocrFraction NOTIFY ocrStatusChanged)
     Q_PROPERTY(QString version READ version CONSTANT)
     Q_PROPERTY(QString configPath READ configPath CONSTANT)
     Q_PROPERTY(bool welcome READ welcome NOTIFY welcomeChanged)
@@ -42,6 +44,8 @@ public:
     QString aiStatus() const { return m_aiStatus; }
     QString ocrStatus() const;
     bool ocrDownloading() const { return m_ocrDownloading; }
+    bool ocrInstalled() const;
+    double ocrFraction() const { return m_ocrFraction; }
     QString version() const;
     QString configPath() const;
 
@@ -73,6 +77,7 @@ private:
     bool m_ocrDownloading = false;
     bool m_welcome = false;
     QString m_ocrProgress;
+    double m_ocrFraction = 0;
 };
 
 }  // namespace selsearch

@@ -446,7 +446,8 @@ Window {
                     color: "#6f7383"
                     font.pixelSize: 11
                     text: win.aiMode ? qsTr("↵ send  ·  Esc close  ·  Tab search  ·  Ctrl+N new chat")
-                                     : qsTr("↵ open  ·  Ctrl+↵ ask AI  ·  Tab AI mode  ·  Esc close")
+                                     : win.launcher.aiEnabled ? qsTr("↵ open  ·  Ctrl+↵ ask AI  ·  Tab AI mode  ·  Esc close")
+                                                              : qsTr("↵ open  ·  ↑↓ choose  ·  Esc close")
                 }
                 // Where data goes: always visible, never surprising.
                 Row {
@@ -491,7 +492,7 @@ Window {
             win.selected = Math.max(0, win.selected - 1)
             list.positionViewAtIndex(win.selected, ListView.Contain)
         } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
-            if (win.aiMode || (event.modifiers & Qt.ControlModifier)) win.launcher.askAi(input.text)
+            if (win.launcher.aiEnabled && (win.aiMode || (event.modifiers & Qt.ControlModifier))) win.launcher.askAi(input.text)
             else if (n > 0) win.launcher.activate(win.selected)
             else win.launcher.searchWeb(input.text)
         } else if (event.key === Qt.Key_N && (event.modifiers & Qt.ControlModifier)) {
