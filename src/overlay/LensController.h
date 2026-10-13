@@ -93,6 +93,7 @@ class LensController : public QObject {
     Q_PROPERTY(bool snapToWindows READ snapToWindows NOTIFY settingsChanged)
     Q_PROPERTY(bool showHints READ showHints NOTIFY settingsChanged)
     Q_PROPERTY(QString onSelect READ onSelect NOTIFY settingsChanged)
+    Q_PROPERTY(bool aiEnabled READ aiEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QString searchEngineName READ searchEngineName NOTIFY settingsChanged)
     Q_PROPERTY(QString imageEngineName READ imageEngineName NOTIFY settingsChanged)
     Q_PROPERTY(QString translateTarget READ translateTarget NOTIFY settingsChanged)
@@ -113,6 +114,7 @@ public:
     bool snapToWindows() const;
     bool showHints() const;
     QString onSelect() const;
+    bool aiEnabled() const;
     QString searchEngineName() const;
     QString imageEngineName() const;
     QString translateTarget() const;
@@ -131,6 +133,8 @@ public:
     Q_INVOKABLE void searchImage(const QString &screen, const QRectF &rect);
     Q_INVOKABLE void translateRegion(const QString &screen, const QRectF &rect);
     Q_INVOKABLE void clearTranslations(const QString &screen);
+    // Opens the configured web translator (Google Translate, DeepL) with `text`.
+    Q_INVOKABLE void translateOnWeb(const QString &text);
     Q_INVOKABLE void ask(const QString &screen, const QRectF &rect, const QString &selectedText);
     Q_INVOKABLE void setTranslateTarget(const QString &code);
     Q_INVOKABLE QVariantList translateLanguages() const;
@@ -172,6 +176,7 @@ private:
     QString m_activeScreen;
     int m_generation = 0;
     std::shared_ptr<std::atomic_bool> m_ocrCancel;
+    QString m_lastTranslateText;
 };
 
 }  // namespace selsearch

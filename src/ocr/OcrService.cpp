@@ -7,6 +7,10 @@
 #include <QStandardPaths>
 #include <QtConcurrent>
 
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+
 namespace selsearch {
 
 #ifndef SELSEARCH_HAVE_ONNX
@@ -88,12 +92,20 @@ QFuture<OcrResult> OcrService::recognize(const QImage &image, const QStringList 
             r.error = QStringLiteral("cancelled");
             return r;
         }
+        // Run (and spawn the engine's helper threads) at low CPU priority so
+        // the overlay keeps animating smoothly while text is recognised.
+        static thread_local bool niced = [] {
+            setpriority(PRIO_PROCESS, pid_t(syscall(SYS_gettid)), 10);
+            return true;
+        }();
+        (void)niced;
         std::lock_guard lock(m_mutex);
         engine->setCancelCheck([this, cancel] { return m_shutdown.load() || (cancel && cancel->load()); });
         QElapsedTimer t;
         t.start();
         OcrResult r = engine->recognize(image, langs);
         engine->setCancelCheck({});
+        segmentCjkWords(r.lines);
         r.engine = engine->id();
         r.elapsedMs = t.elapsed();
         return r;

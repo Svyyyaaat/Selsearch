@@ -25,6 +25,8 @@ public:
     virtual QString id() const = 0;
     // Windows visible on screen right now, topmost first.
     virtual QList<WindowInfo> visibleWindows() = 0;
+    // Name of the output that has focus (where the user is looking), or empty.
+    virtual QString focusedOutput() = 0;
 };
 
 // Hyprland ($HYPRLAND_INSTANCE_SIGNATURE), sway ($SWAYSOCK), or nullptr.
@@ -34,5 +36,7 @@ std::unique_ptr<Compositor> createCompositor();
 QList<WindowInfo> parseHyprlandWindows(const QByteArray &clientsJson, const QByteArray &monitorsJson);
 // Exposed for tests: parse sway's GET_TREE reply.
 QList<WindowInfo> parseSwayTree(const QByteArray &treeJson);
+// Exposed for tests: the focused output from Hyprland `j/monitors` / sway GET_OUTPUTS.
+QString parseFocusedOutput(const QByteArray &outputsJson);
 
 }  // namespace selsearch

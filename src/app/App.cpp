@@ -64,6 +64,17 @@ bool App::init(QString *error)
     connect(m_lens.get(), &LensController::openUrl, this, [this](const QUrl &url) { openUrl(url); });
     connect(m_lens.get(), &LensController::failed, this, [](const QString &msg) { qCWarning(lcApp) << msg; });
 
+    // Rebuild the translator when its settings change.
+    connect(m_config.get(), &Config::changed, this, [this](const QString &key) {
+        const bool relevant = key == QLatin1String("translate.backend") || key.startsWith(QLatin1String("translate.libretranslate"))
+            || key.startsWith(QLatin1String("ai."));
+        if (!relevant)
+            return;
+        m_lens->setTranslator(nullptr);
+        m_translator = createTranslator(*m_config);
+        m_lens->setTranslator(m_translator.get());
+    });
+
     m_web = std::make_unique<WebPanel>();
     connect(m_web.get(), &WebPanel::openExternal, this, [](const QUrl &url) { QDesktopServices::openUrl(url); });
 

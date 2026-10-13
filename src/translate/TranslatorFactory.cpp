@@ -15,17 +15,11 @@ namespace {
 
 constexpr int kLibreProbeTimeoutMs = 500;
 
-std::unique_ptr<LlmTranslator> makeLlm(const Config &config, QObject *parent)
-{
-    if (!config.boolean(QStringLiteral("ai.enabled")))
-        return nullptr;
-    return std::make_unique<LlmTranslator>(aiSettingsFromConfig(config), parent);
-}
-
 // "auto": the first backend that can do the job, in order
 //   bergamot (a model route exists for the pair),
-//   libretranslate (the server answered /languages within 500 ms; cached),
-//   llm (ai.enabled).
+//   libretranslate (the server answered /languages within 500 ms; cached).
+// The AI model is only used when chosen explicitly (backend "llm"); when
+// nothing local works the lens falls back to a web translator page.
 // When a backend fails at run time the next one is tried; the first error is
 // reported if all fail.
 class AutoTranslator : public Translator {
@@ -37,8 +31,6 @@ public:
         const QString url = config.string(QStringLiteral("translate.libretranslate_url")).trimmed();
         if (!url.isEmpty())
             m_libre = new LibreTranslateTranslator(url, config.string(QStringLiteral("translate.libretranslate_key")), this);
-        if (auto llm = makeLlm(config, this))
-            m_llm = llm.release();
     }
 
     QString id() const override { return QStringLiteral("auto"); }
@@ -133,7 +125,7 @@ private:
             r.error = !state->firstError.isEmpty()
                 ? state->firstError
                 : tr("No translation backend is available. Install translateLocally with a model for "
-                     "%1 → %2, run a LibreTranslate server, or enable AI.")
+                     "%1 → %2, run a LibreTranslate server, or choose a web or AI translator.")
                       .arg(languageEnglishName(r.detectedSource.isEmpty() ? QStringLiteral("auto") : r.detectedSource),
                            languageEnglishName(state->target));
             state->callback(r);

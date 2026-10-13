@@ -234,10 +234,48 @@ ApplicationWindow {
                 subtitle: qsTr("Signal darkens the screen and lights a dot field around your selection. Mono only darkens. Aurora tints with two hues of your accent.")
                 options: [{ id: "signal", name: qsTr("Signal") }, { id: "mono", name: qsTr("Mono") }, { id: "aurora", name: qsTr("Aurora") }]
             }
-            TextRow {
-                title: qsTr("Accent colour"); key: "general.accent"
-                subtitle: qsTr("A hex colour like #7aa2f7, used for text selection and buttons. Empty = built-in palette.")
-                placeholder: "#8e9bff"
+            SettingRow {
+                id: accentRow
+                title: qsTr("Accent colour")
+                subtitle: qsTr("Used for the dot field, text selection and buttons.")
+                readonly property string current: win.val("general.accent") || ""
+                readonly property var presets: ["", "#7aa2f7", "#5eead4", "#a3e635", "#facc15", "#fb923c", "#f472b6", "#c084fc", "#e5e7eb"]
+                Row {
+                    spacing: 6
+                    Repeater {
+                        model: accentRow.presets
+                        delegate: Rectangle {
+                            required property string modelData
+                            readonly property bool on: accentRow.current.toLowerCase() === modelData.toLowerCase()
+                            width: 26; height: 26; radius: 13
+                            color: modelData === "" ? "#8e9bff" : modelData
+                            border.color: on ? "white" : Qt.rgba(1, 1, 1, 0.12)
+                            border.width: on ? 2 : 1
+                            ToolTip.visible: swHover.hovered
+                            ToolTip.text: modelData === "" ? qsTr("Default") : modelData
+                            HoverHandler { id: swHover }
+                            TapHandler { onTapped: modelData === "" ? win.cfg.reset("general.accent") : win.set("general.accent", modelData) }
+                        }
+                    }
+                    // Custom colour: opens the wheel.
+                    Rectangle {
+                        readonly property bool custom: accentRow.current !== "" && accentRow.presets.indexOf(accentRow.current.toLowerCase()) < 0
+                        width: 26; height: 26; radius: 13
+                        color: custom ? accentRow.current : "transparent"
+                        border.color: custom ? "white" : Qt.rgba(1, 1, 1, 0.3)
+                        border.width: custom ? 2 : 1
+                        Icon { visible: !parent.custom; anchors.centerIn: parent; name: "plus"; size: 14; color: win.fg }
+                        ToolTip.visible: wheelHover.hovered
+                        ToolTip.text: qsTr("Custom colour…")
+                        HoverHandler { id: wheelHover }
+                        TapHandler {
+                            onTapped: {
+                                picker.color = accentRow.current !== "" ? accentRow.current : "#8e9bff"
+                                picker.open()
+                            }
+                        }
+                    }
+                }
             }
             SwitchRow { title: qsTr("Follow the desktop accent colour"); key: "general.follow_portal_accent"
                 subtitle: qsTr("Reads the accent from xdg-desktop-portal when your desktop provides one (GNOME, KDE). Falls back to the colour above.") }
@@ -290,18 +328,28 @@ ApplicationWindow {
         Column {
             ChoiceRow { title: qsTr("Engine"); key: "ocr.engine"
                 options: [{ id: "auto", name: qsTr("Automatic") }, { id: "paddle", name: "PP-OCRv5" }, { id: "tesseract", name: "Tesseract" }] }
-            TextRow {
-                title: qsTr("Languages"); key: "ocr.languages"; list: true
-                subtitle: qsTr("Comma-separated codes like ru, en. Empty = your system languages plus English.")
-                placeholder: "en"
+            LanguagesRow {
+                title: qsTr("Languages")
+                subtitle: qsTr("Languages you read on screen, most used first. None = your system languages plus English.")
+                key: "ocr.languages"
             }
             SettingRow {
                 title: qsTr("PP-OCRv5 models")
                 subtitle: win.settings.ocrStatus
-                Button {
-                    text: win.settings.ocrDownloading ? qsTr("Downloading…") : qsTr("Download")
-                    enabled: !win.settings.ocrDownloading
-                    onClicked: win.settings.downloadOcrModels()
+                Column {
+                    spacing: 6
+                    Button {
+                        width: 150
+                        text: win.settings.ocrDownloading ? qsTr("Downloading…") : win.settings.ocrInstalled ? qsTr("✓ Installed") : qsTr("Download")
+                        enabled: !win.settings.ocrDownloading && !win.settings.ocrInstalled
+                        onClicked: win.settings.downloadOcrModels()
+                    }
+                    Rectangle {
+                        visible: win.settings.ocrDownloading
+                        width: 150; height: 4; radius: 2
+                        color: Qt.rgba(1, 1, 1, 0.1)
+                        Rectangle { width: parent.width * win.settings.ocrFraction; height: parent.height; radius: 2; color: win.accent }
+                    }
                 }
             }
             NumberRow { title: qsTr("Unload models after (seconds)"); key: "ocr.unload_after_s"; from: 0; to: 3600
@@ -313,10 +361,14 @@ ApplicationWindow {
         id: translatePage
         Column {
             ChoiceRow { title: qsTr("Translator"); key: "translate.backend"
-                options: [{ id: "auto", name: qsTr("Automatic") }, { id: "bergamot", name: qsTr("Firefox Translations (translateLocally)") },
+                options: [{ id: "auto", name: qsTr("Automatic") }, { id: "web", name: qsTr("Web page (Google Translate / DeepL)") },
+                          { id: "bergamot", name: qsTr("Firefox Translations (translateLocally)") },
                           { id: "libretranslate", name: "LibreTranslate" }, { id: "llm", name: qsTr("AI model") }]
                 combo: true
-                subtitle: qsTr("Automatic uses translateLocally if installed, then a LibreTranslate server, then your AI model.") }
+                subtitle: qsTr("Automatic translates in place with translateLocally or a LibreTranslate server when available, otherwise opens the web translator below. The AI model is only used if you pick it.") }
+            ChoiceRow { title: qsTr("Web translator"); key: "translate.web_service"
+                options: [{ id: "google", name: "Google Translate" }, { id: "deepl", name: "DeepL" }]
+                subtitle: qsTr("Opens with the selected text. This sends the text to that site.") }
             ChoiceRow { title: qsTr("Translate into"); key: "translate.target"; combo: true
                 options: [{ id: "", name: qsTr("System language") }].concat(win.settings.languages.map(l => ({ id: l.code, name: l.name }))) }
             TextRow { title: qsTr("LibreTranslate URL"); key: "translate.libretranslate_url"; placeholder: "http://localhost:5000" }
@@ -481,16 +533,103 @@ ApplicationWindow {
         property string placeholder
         property bool list: false
         property bool secret: false
+        Text {
+            id: savedMark
+            anchors.right: field.left
+            anchors.rightMargin: 8
+            anchors.verticalCenter: field.verticalCenter
+            text: qsTr("Saved")
+            color: win.accent
+            font.pixelSize: 12
+            opacity: 0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Timer { id: savedTimer; interval: 1200; onTriggered: savedMark.opacity = 0 }
+        }
         TextField {
+            id: field
             width: 260
             placeholderText: tr.placeholder
             echoMode: tr.secret ? TextInput.Password : TextInput.Normal
             text: { const v = win.val(tr.key); return tr.list ? (v || []).join(", ") : (v || "") }
             onEditingFinished: {
-                if (tr.list) win.set(tr.key, text.split(",").map(s => s.trim()).filter(s => s.length > 0))
-                else win.set(tr.key, text.trim())
+                const v = tr.list ? text.split(",").map(s => s.trim()).filter(s => s.length > 0) : text.trim()
+                const old = win.val(tr.key)
+                if (JSON.stringify(old || (tr.list ? [] : "")) === JSON.stringify(v)) return
+                win.set(tr.key, v)
+                savedMark.opacity = 1
+                savedTimer.restart()
             }
         }
+    }
+
+    // Chips for a list of language codes with an "Add" dropdown.
+    component LanguagesRow: SettingRow {
+        id: lr
+        property string key
+        readonly property var codes: win.val(lr.key) || []
+        function nameOf(code) {
+            for (const l of win.settings.languages) if (l.code === code) return l.name.split(" · ")[0]
+            return code
+        }
+        Column {
+            spacing: 8
+            width: 300
+            Flow {
+                width: parent.width
+                spacing: 6
+                Repeater {
+                    model: lr.codes
+                    delegate: Rectangle {
+                        required property string modelData
+                        required property int index
+                        height: 28
+                        width: chipRow.implicitWidth + 16
+                        radius: 14
+                        color: Qt.rgba(1, 1, 1, 0.07)
+                        border.color: Qt.rgba(1, 1, 1, 0.1)
+                        Row {
+                            id: chipRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: lr.nameOf(modelData); color: win.fg; font.pixelSize: 13 }
+                            Icon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "x"; size: 12; color: win.fgDim
+                                TapHandler { onTapped: { const l = lr.codes.slice(); l.splice(index, 1); win.set(lr.key, l) } }
+                            }
+                        }
+                    }
+                }
+                Text {
+                    visible: lr.codes.length === 0
+                    height: 28
+                    verticalAlignment: Text.AlignVCenter
+                    text: qsTr("System languages")
+                    color: win.fgDim
+                    font.pixelSize: 13
+                    font.italic: true
+                }
+            }
+            ComboBox {
+                width: parent.width
+                textRole: "name"
+                valueRole: "code"
+                displayText: qsTr("Add a language…")
+                model: win.settings.languages.filter(l => lr.codes.indexOf(l.code) < 0)
+                onActivated: {
+                    const l = lr.codes.slice()
+                    l.push(currentValue)
+                    win.set(lr.key, l)
+                }
+            }
+        }
+    }
+
+    ColorPicker {
+        id: picker
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        onAccepted: (c) => win.set("general.accent", c.toString())
     }
 
     component NumberRow: SettingRow {

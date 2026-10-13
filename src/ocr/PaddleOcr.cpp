@@ -381,7 +381,12 @@ public:
         return ro;
     }
 
-    static int threadCount() { return std::min(4, int(std::max(1u, std::thread::hardware_concurrency()))); }
+    // Leave one core for the compositor and the overlay's rendering.
+    static int threadCount()
+    {
+        const int hw = int(std::max(1u, std::thread::hardware_concurrency()));
+        return std::clamp(hw - 1, 1, 4);
+    }
 
     bool isAvailable() const override
     {

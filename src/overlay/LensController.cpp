@@ -35,6 +35,7 @@ namespace {
 
 struct SessionGrab {
     CaptureResult capture;
+    QString focusedOutput;
     QList<WindowInfo> windows;
 };
 
@@ -132,6 +133,7 @@ QColor LensController::accent() const
 bool LensController::recognizeText() const { return m_config.boolean(QStringLiteral("lens.recognize_text")); }
 bool LensController::snapToWindows() const { return m_config.boolean(QStringLiteral("lens.snap_to_windows")); }
 bool LensController::showHints() const { return m_config.boolean(QStringLiteral("lens.show_hints")); }
+bool LensController::aiEnabled() const { return m_config.boolean(QStringLiteral("ai.enabled")); }
 QString LensController::onSelect() const { return m_config.string(QStringLiteral("lens.on_select")); }
 
 QString LensController::searchEngineName() const
@@ -235,6 +237,8 @@ void LensController::start(const QString &mode)
     auto future = QtConcurrent::run([backend, compositor, layout, snap] {
         SessionGrab g;
         g.capture = backend->grabAll(layout);
+        if (compositor)
+            g.focusedOutput = compositor->focusedOutput();
         if (compositor && snap)
             g.windows = compositor->visibleWindows();
         return g;
@@ -251,7 +255,7 @@ void LensController::start(const QString &mode)
         qCDebug(lcLens) << "captured with" << g.capture.backend << "in" << g.capture.elapsedMs << "ms";
         ++m_generation;
         m_frames->clear();
-        QString focusedScreen;
+        QString focusedScreen = find(g.focusedOutput) ? g.focusedOutput : QString();
         for (auto *s : std::as_const(m_screens)) {
             QImage frame;
             for (const auto &o : g.capture.outputs)
@@ -398,6 +402,7 @@ void LensController::runOcr(LensScreen *s)
                 words << QVariantMap{{QStringLiteral("x"), w.box.x() * f}, {QStringLiteral("y"), w.box.y() * f},
                                      {QStringLiteral("w"), w.box.width() * f}, {QStringLiteral("h"), w.box.height() * f},
                                      {QStringLiteral("text"), w.text}, {QStringLiteral("line"), li},
+                                     {QStringLiteral("space"), w.spaceBefore},
                                      {QStringLiteral("index"), index++}};
             }
         }
@@ -424,7 +429,7 @@ void LensController::copyImage(const QString &screen, const QRectF &rect)
     if (img.isNull())
         return;
     QGuiApplication::clipboard()->setImage(img);
-    Q_EMIT notify(tr("Image copied"));
+    Q_EMIT notify(tr("Copied image (%1 × %2)").arg(img.width()).arg(img.height()));
 }
 
 void LensController::copyText(const QString &text)
@@ -432,7 +437,11 @@ void LensController::copyText(const QString &text)
     if (text.isEmpty())
         return;
     QGuiApplication::clipboard()->setText(text);
-    Q_EMIT notify(tr("Text copied"));
+    // Show what was copied, on one line and shortened.
+    QString shown = text.simplified();
+    if (shown.size() > 60)
+        shown = shown.left(57).trimmed() + QStringLiteral("…");
+    Q_EMIT notify(tr("Copied “%1”").arg(shown));
 }
 
 void LensController::saveImage(const QString &screen, const QRectF &rect)
@@ -482,10 +491,8 @@ void LensController::translateRegion(const QString &screen, const QRectF &rect)
     LensScreen *s = find(screen);
     if (!s)
         return;
-    if (!m_translator || !m_translator->isAvailable()) {
-        Q_EMIT notify(tr("No translator available. Install translateLocally or set one up in Settings."));
-        return;
-    }
+    const bool web = m_config.string(QStringLiteral("translate.backend")) == QLatin1String("web")
+        || !m_translator || !m_translator->isAvailable();
     // Lines of words inside the region, each translated as one segment.
     QMap<int, QPair<QRectF, QStringList>> lines;
     for (const QVariant &v : std::as_const(s->m_words)) {
@@ -502,12 +509,20 @@ void LensController::translateRegion(const QString &screen, const QRectF &rect)
         Q_EMIT notify(s->ocrBusy() ? tr("Still reading the text…") : tr("No text found here"));
         return;
     }
+    if (web) {
+        QStringList text;
+        for (auto it = lines.cbegin(); it != lines.cend(); ++it)
+            text << it.value().second.join(QLatin1Char(' '));
+        translateOnWeb(text.join(QLatin1Char('\n')));
+        return;
+    }
     TranslationRequest req;
     QList<QRectF> boxes;
     for (auto it = lines.cbegin(); it != lines.cend(); ++it) {
         req.segments << it.value().second.join(QLatin1Char(' '));
         boxes << it.value().first;
     }
+    m_lastTranslateText = req.segments.join(QLatin1Char('\n'));
     req.source = QStringLiteral("auto");
     req.target = translateTarget();
     s->m_translating = true;
@@ -522,7 +537,9 @@ void LensController::translateRegion(const QString &screen, const QRectF &rect)
         guard->m_translating = false;
         Q_EMIT guard->translatingChanged();
         if (!r.ok() || r.segments.size() != boxes.size()) {
-            Q_EMIT notify(tr("Translation failed: %1").arg(r.error));
+            // Local translation unavailable for this pair: use the web.
+            Q_EMIT notify(tr("Translating on the web instead"));
+            translateOnWeb(m_lastTranslateText);
             return;
         }
         QVariantList out;
@@ -539,6 +556,26 @@ void LensController::translateRegion(const QString &screen, const QRectF &rect)
         guard->m_translations = out;
         Q_EMIT guard->translationsChanged();
     });
+}
+
+void LensController::translateOnWeb(const QString &text)
+{
+    if (text.trimmed().isEmpty())
+        return;
+    const QString target = translateTarget();
+    QUrl url;
+    if (m_config.string(QStringLiteral("translate.web_service")) == QLatin1String("deepl")) {
+        // DeepL reads the text from the fragment; '/' must be escaped as "\/".
+        QString t = text;
+        t.replace(QLatin1Char('/'), QStringLiteral("\\/"));
+        url = QUrl(QStringLiteral("https://www.deepl.com/translator#auto/%1/").arg(target)
+                   + QString::fromUtf8(QUrl::toPercentEncoding(t)));
+    } else {
+        url = QUrl(QStringLiteral("https://translate.google.com/?sl=auto&tl=%1&op=translate&text=").arg(target)
+                   + QString::fromUtf8(QUrl::toPercentEncoding(text)));
+    }
+    Q_EMIT openUrl(url);
+    close();  // the results panel sits below the lens layer
 }
 
 void LensController::clearTranslations(const QString &screen)

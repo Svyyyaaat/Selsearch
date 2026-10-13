@@ -82,6 +82,33 @@ private Q_SLOTS:
         QVERIFY(w[1].focused);
     }
 
+    void cjkSegmentation()
+    {
+        OcrLine line;
+        line.words << OcrWord{QStringLiteral("ビックカメラの通販サイト。"), QRectF(0, 0, 130, 20)};
+        line.words << OcrWord{QStringLiteral("Linux"), QRectF(140, 0, 50, 20)};
+        QList<OcrLine> lines{line};
+        segmentCjkWords(lines);
+        QStringList texts;
+        for (const auto &w : lines[0].words)
+            texts << w.text;
+        QVERIFY2(texts.size() >= 4, qPrintable(texts.join(QLatin1Char('|'))));
+        QCOMPARE(texts.first(), QStringLiteral("ビックカメラ"));
+        QVERIFY(texts.contains(QStringLiteral("Linux")));
+        // Rejoined text has no spaces inside the Japanese run.
+        QCOMPARE(lines[0].text(), QStringLiteral("ビックカメラの通販サイト。 Linux"));
+        // Boxes stay ordered and inside the original word.
+        for (int i = 1; i < lines[0].words.size() - 1; ++i)
+            QVERIFY(lines[0].words[i].box.left() >= lines[0].words[i - 1].box.left());
+        QVERIFY(lines[0].words[lines[0].words.size() - 2].box.right() <= 130.5);
+    }
+
+    void focusedOutput()
+    {
+        QCOMPARE(parseFocusedOutput(R"([{"name":"DP-1","focused":false},{"name":"HDMI-A-1","focused":true}])"), QStringLiteral("HDMI-A-1"));
+        QCOMPARE(parseFocusedOutput("[]"), QString());
+    }
+
     void outputTransform()
     {
         QImage img(4, 2, QImage::Format_RGB32);

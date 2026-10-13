@@ -18,6 +18,7 @@ struct OcrWord {
     QString text;
     QRectF box;
     float confidence = 1.0f;
+    bool spaceBefore = true;  // false between pieces of one CJK run (no spaces in the source)
 };
 
 // A line of text in reading order. Words are left-to-right (or right-to-left
@@ -65,5 +66,11 @@ std::unique_ptr<OcrEngine> createTesseractOcrEngine();
 
 // Sort lines into reading order and recompute line boxes. Shared helper.
 void sortReadingOrder(QList<OcrLine> &lines);
+
+// Split Chinese/Japanese runs (which OCR returns as one "word", since the
+// scripts use no spaces) into dictionary words (ICU), so they can be selected
+// one by one. Boxes are divided proportionally to character widths.
+void segmentCjkWords(QList<OcrLine> &lines);
+bool containsCjk(QStringView text);
 
 }  // namespace selsearch

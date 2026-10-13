@@ -68,6 +68,16 @@ QList<WindowInfo> parseHyprlandWindows(const QByteArray &clientsJson, const QByt
     return out;
 }
 
+QString parseFocusedOutput(const QByteArray &outputsJson)
+{
+    for (const auto &m : QJsonDocument::fromJson(outputsJson).array()) {
+        const auto o = m.toObject();
+        if (o.value(QLatin1String("focused")).toBool())
+            return o.value(QLatin1String("name")).toString();
+    }
+    return {};
+}
+
 class Hyprland final : public Compositor {
 public:
     explicit Hyprland(QString socketPath)
@@ -80,6 +90,8 @@ public:
     {
         return parseHyprlandWindows(request("j/clients"), request("j/monitors"));
     }
+
+    QString focusedOutput() override { return parseFocusedOutput(request("j/monitors")); }
 
 private:
     QByteArray request(const QByteArray &cmd)
@@ -142,14 +154,18 @@ public:
     }
     QString id() const override { return QStringLiteral("sway"); }
 
-    QList<WindowInfo> visibleWindows() override
+    QList<WindowInfo> visibleWindows() override { return parseSwayTree(request(4)); }       // GET_TREE
+    QString focusedOutput() override { return parseFocusedOutput(request(3)); }             // GET_OUTPUTS
+
+private:
+    QByteArray request(quint32 type)
     {
         QLocalSocket s;
         s.connectToServer(m_socket);
         if (!s.waitForConnected(500))
             return {};
         QByteArray msg("i3-ipc");
-        quint32 len = 0, type = 4;  // GET_TREE
+        quint32 len = 0;
         msg.append(reinterpret_cast<const char *>(&len), 4);
         msg.append(reinterpret_cast<const char *>(&type), 4);
         s.write(msg);
@@ -162,10 +178,9 @@ public:
         const quint32 payloadLen = qFromLittleEndian<quint32>(buf.constData() + 6);
         while (quint32(buf.size()) < 14 + payloadLen && s.waitForReadyRead(500))
             buf += s.readAll();
-        return parseSwayTree(buf.mid(14, payloadLen));
+        return buf.mid(14, payloadLen);
     }
 
-private:
     QString m_socket;
 };
 

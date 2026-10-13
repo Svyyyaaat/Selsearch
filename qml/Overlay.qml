@@ -35,6 +35,8 @@ Window {
     property string dragKind: ""   // new | move | resize-<edges> | text
     property int textAnchor: -1
     property int textFocus: -1
+    property var picked: ({})      // Ctrl+click picks: { index: true }
+    property int pickedCount: 0
     property var hoverWindow: null
     property int hoverWord: -1
     property bool translated: false
@@ -42,6 +44,16 @@ Window {
 
     readonly property bool hasSel: sel.width > 2 && sel.height > 2
     readonly property bool isTextSel: phase === "texting" || phase === "textSelected"
+    function isSelectedWord(i) { return isTextSel && ((textAnchor >= 0 && i >= selFirst && i <= selLast) || !!picked[i]) }
+    // Selected words in reading order (range ∪ picks).
+    readonly property var selectedWordList: {
+        if (!isTextSel) return []
+        pickedCount  // dependency
+        let out = []
+        for (const w of words) if (isSelectedWord(w.index)) out.push(w)
+        return out
+    }
+    readonly property var regionWords: phase === "selected" ? wordsIn(sel) : []
     readonly property bool textMode: lens.mode === "text"
     readonly property var words: lensScreen.words
     readonly property int selFirst: Math.min(textAnchor, textFocus)
@@ -68,6 +80,8 @@ Window {
         lassoPoints = []
         textAnchor = -1
         textFocus = -1
+        picked = ({})
+        pickedCount = 0
         focusAnim.stop(); focusAmt = 0
         waveAnim.stop(); wave = -1
         if (translated) { lens.clearTranslations(lensScreen.name); translated = false }
@@ -156,24 +170,29 @@ Window {
         return out
     }
     function joinWords(list) {
-        let text = "", lastLine = -1
+        let text = "", lastLine = -1, lastIndex = -2
         for (let w of list) {
-            if (lastLine >= 0) text += (w.line !== lastLine) ? "\n" : " "
+            if (lastLine >= 0) {
+                if (w.line !== lastLine) text += "\n"
+                else if (w.index !== lastIndex + 1) text += " "   // gap between picked words
+                else if (w.space !== false) text += " "            // no spaces inside CJK runs
+            }
             text += w.text
             lastLine = w.line
+            lastIndex = w.index
         }
         return text
     }
     function selectedText() {
-        if (isTextSel && textAnchor >= 0) return joinWords(words.slice(selFirst, selLast + 1))
+        if (isTextSel) return joinWords(selectedWordList)
         if (hasSel) return joinWords(wordsIn(sel))
         return ""
     }
     function textSelectionRect() {
-        if (textAnchor < 0) return Qt.rect(0, 0, 0, 0)
+        const list = selectedWordList
+        if (list.length === 0) return Qt.rect(0, 0, 0, 0)
         let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9
-        for (let i = selFirst; i <= selLast; ++i) {
-            let w = words[i]
+        for (const w of list) {
             x1 = Math.min(x1, w.x); y1 = Math.min(y1, w.y); x2 = Math.max(x2, w.x + w.w); y2 = Math.max(y2, w.y + w.h)
         }
         return Qt.rect(x1, y1, x2 - x1, y2 - y1)
@@ -218,7 +237,7 @@ Window {
         lens.copyText(t)
         closeSoon.restart()
     }
-    function doAsk() { lens.ask(lensScreen.name, isTextSel ? Qt.rect(0, 0, 0, 0) : sel, selectedText()) }
+    function doAsk() { if (!lens.aiEnabled) return; lens.ask(lensScreen.name, isTextSel ? Qt.rect(0, 0, 0, 0) : sel, selectedText()) }
     function doTranslate() {
         if (translated) { lens.clearTranslations(lensScreen.name); translated = false; return }
         translated = true
@@ -231,6 +250,7 @@ Window {
     }
     function selectAllText() {
         if (words.length === 0) return
+        picked = ({}); pickedCount = 0
         textAnchor = 0; textFocus = words.length - 1
         sel = Qt.rect(0, 0, 0, 0)
         finishText()
@@ -308,39 +328,51 @@ Window {
             Behavior on height { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
         }
 
-        // Recognised words: pills inside the selection cascade in; hovered and
-        // selected words are highlighted anywhere.
+        // Recognised words. Only words that are highlighted get an item:
+        // creating hundreds of items at once would stall the first frames.
+        component WordPill: Rectangle {
+            required property var word
+            property bool strong: false
+            x: word.x - 2
+            y: word.y - 1
+            width: word.w + 4
+            height: word.h + 2
+            radius: Math.min(6, height / 3)
+            color: strong ? Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.42) : Qt.rgba(1, 1, 1, 0.16)
+            border.color: strong ? Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.85) : "transparent"
+            border.width: strong ? 1 : 0
+        }
+        // Words inside a finished region cascade in.
         Repeater {
-            model: win.words
-            delegate: Rectangle {
-                id: pill
+            model: win.phase === "selected" ? win.regionWords : []
+            delegate: WordPill {
                 required property var modelData
-                readonly property bool selected: win.isTextSel && modelData.index >= win.selFirst && modelData.index <= win.selLast
-                readonly property bool inRegion: win.phase === "selected" && win.contains(win.sel, modelData.x + modelData.w / 2, modelData.y + modelData.h / 2)
-                readonly property bool hovered: win.hoverWord === modelData.index && !win.isTextSel
-                x: modelData.x - 2
-                y: modelData.y - 1
-                width: modelData.w + 4
-                height: modelData.h + 2
-                radius: Math.min(6, height / 3)
-                color: selected ? Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.42)
-                     : hovered ? Qt.rgba(1, 1, 1, 0.22)
-                     : inRegion ? Qt.rgba(1, 1, 1, 0.13) : "transparent"
-                border.color: selected ? Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.8) : "transparent"
-                border.width: selected ? 1 : 0
-                opacity: inRegion && !selected && !hovered ? 0 : 1
-                visible: color.a > 0
-                states: State {
-                    when: inRegion && !selected && !hovered
-                    PropertyChanges { pill.opacity: 1 }
-                }
-                transitions: Transition {
-                    SequentialAnimation {
-                        PauseAnimation { duration: (modelData.index % 24) * 14 }
-                        NumberAnimation { property: "opacity"; duration: 220; easing.type: Easing.OutCubic }
-                    }
+                required property int index
+                word: modelData
+                opacity: 0
+                Component.onCompleted: fadeIn.start()
+                SequentialAnimation on opacity {
+                    id: fadeIn
+                    running: false
+                    PauseAnimation { duration: Math.min(index, 30) * 12 }
+                    NumberAnimation { to: 1; duration: 200; easing.type: Easing.OutCubic }
                 }
             }
+        }
+        // Selected words (drag range and Ctrl+click picks).
+        Repeater {
+            model: win.selectedWordList
+            delegate: WordPill {
+                required property var modelData
+                word: modelData
+                strong: true
+            }
+        }
+        // Hovered word.
+        WordPill {
+            visible: win.hoverWord >= 0 && win.hoverWord < win.words.length && !win.isSelectedWord(win.hoverWord)
+            word: visible ? win.words[win.hoverWord] : ({ x: 0, y: 0, w: 0, h: 0 })
+            color: Qt.rgba(1, 1, 1, 0.22)
         }
 
         // Translations painted over the original lines.
@@ -470,13 +502,17 @@ Window {
                     pts.push(p)
                     win.lassoPoints = pts
                     const direct = win.rectFromPoints(win.pressPos, p)
-                    if (!win.lasso && pts.length > 8) {
-                        // A path that leaves the drag rectangle a lot is a lasso.
-                        let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
-                        for (let q of pts) { minX = Math.min(minX, q.x); minY = Math.min(minY, q.y); maxX = Math.max(maxX, q.x); maxY = Math.max(maxY, q.y) }
+                    // A lasso encloses area; a drag that doubles back does not.
+                    // Re-evaluated on every move so pulling back shrinks the box.
+                    if (pts.length > 8) {
+                        let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9, area = 0
+                        for (let k = 0; k < pts.length; ++k) {
+                            const q = pts[k], n = pts[(k + 1) % pts.length]
+                            minX = Math.min(minX, q.x); minY = Math.min(minY, q.y); maxX = Math.max(maxX, q.x); maxY = Math.max(maxY, q.y)
+                            area += q.x * n.y - n.x * q.y
+                        }
                         const bboxArea = (maxX - minX) * (maxY - minY)
-                        const directArea = direct.width * direct.height
-                        if (bboxArea > directArea * 1.6 + 2500) win.lasso = true
+                        win.lasso = bboxArea > 2500 && Math.abs(area) / 2 > bboxArea * 0.35
                     }
                     if (win.lasso) {
                         let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
@@ -520,6 +556,25 @@ Window {
                 const word = win.lens.recognizeText ? (win.textMode ? win.nearestWord(mouse.x, mouse.y) : win.wordAt(mouse.x, mouse.y)) : -1
                 if (edges) {
                     win.dragKind = "resize-" + edges
+                } else if (word >= 0 && (mouse.modifiers & Qt.ControlModifier)) {
+                    // Ctrl+click toggles single words in or out of the selection.
+                    win.dragKind = "pick"
+                    win.interacted = true
+                    win.lens.activeScreen = win.lensScreen.name
+                    if (!win.isTextSel) win.clearSelection()
+                    // Fold a dragged range into individual picks, then toggle.
+                    let p = Object.assign({}, win.picked)
+                    if (win.textAnchor >= 0) {
+                        for (let i = win.selFirst; i <= win.selLast; ++i) p[i] = true
+                        win.textAnchor = -1
+                        win.textFocus = -1
+                    }
+                    if (p[word]) delete p[word]
+                    else p[word] = true
+                    win.picked = p
+                    win.pickedCount = Object.keys(p).length
+                    if (win.pickedCount === 0) { win.clearSelection(); return }
+                    win.phase = "texting"
                 } else if (word >= 0) {
                     // Pressing on text selects text, even inside a region.
                     win.dragKind = "text"
@@ -528,7 +583,7 @@ Window {
                     if (mouse.modifiers & Qt.ShiftModifier && win.textAnchor >= 0) {
                         win.textFocus = word
                     } else {
-                        if (win.phase !== "texting" && win.phase !== "textSelected") win.clearSelection()
+                        win.clearSelection()
                         win.textAnchor = word
                         win.textFocus = word
                     }
@@ -572,7 +627,7 @@ Window {
                 } else if (kind === "move" || kind.startsWith("resize-")) {
                     win.finishRegion(false)
                     radiusAnim.restart()
-                } else if (kind === "text") {
+                } else if (kind === "text" || kind === "pick") {
                     win.finishText()
                 }
                 updateHover(mouse.x, mouse.y)
@@ -609,7 +664,7 @@ Window {
             } else if (event.key === Qt.Key_T && event.modifiers === Qt.NoModifier) {
                 if (win.hasSel || win.isTextSel) win.doTranslate(); else win.translateAll()
             } else if (event.key === Qt.Key_A && event.modifiers === Qt.NoModifier) {
-                if (win.hasSel || win.isTextSel) win.doAsk()
+                if ((win.hasSel || win.isTextSel) && win.lens.aiEnabled) win.doAsk()
             } else if (event.matches(StandardKey.Save)) {
                 if (win.hasSel) win.lens.saveImage(win.lensScreen.name, win.sel)
             } else {
@@ -661,6 +716,7 @@ Window {
                 langMenu.y = toolbar.below ? p.y : toolbar.y - langMenu.height - 8
                 langMenu.open()
             }
+            aiEnabled: win.lens.aiEnabled
             onAsk: win.doAsk()
             onSave: win.lens.saveImage(win.lensScreen.name, win.sel)
         }

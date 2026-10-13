@@ -11,6 +11,7 @@ Item {
     property bool translated: false
     property string targetLang: "en"
     property color accent: "#8e9bff"
+    property bool aiEnabled: true
 
     signal search()
     signal copyImage()
@@ -93,6 +94,7 @@ Item {
                 }
             }
             IconButton {
+                visible: root.aiEnabled
                 iconName: "sparkles"
                 tip: qsTr("Ask AI about this  (A)")
                 onClicked: root.ask()
