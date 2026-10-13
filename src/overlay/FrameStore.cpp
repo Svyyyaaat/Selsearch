@@ -34,8 +34,8 @@ QImage FrameStore::frame(const QString &screen) const
 
 QImage FrameStore::requestImage(const QString &id, QSize *size, const QSize &)
 {
-    // id = "<screen>/<generation>"
-    const QString screen = id.section(QLatin1Char('/'), 0, 0);
+    // id = "<hex of the screen name>/<generation>"
+    const QString screen = QString::fromUtf8(QByteArray::fromHex(id.section(QLatin1Char('/'), 0, 0).toLatin1()));
     QImage img;
     {
         QMutexLocker lock(&m_mutex);

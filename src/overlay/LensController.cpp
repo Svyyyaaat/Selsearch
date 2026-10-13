@@ -83,7 +83,8 @@ LensScreen::LensScreen(QScreen *screen, QObject *parent)
 
 QString LensScreen::frameUrl() const
 {
-    return QStringLiteral("image://frame/%1/%2").arg(m_name).arg(m_generation);
+    // Hex: Windows names screens "\\.\DISPLAY1", which a URL would mangle.
+    return QStringLiteral("image://frame/%1/%2").arg(QString::fromLatin1(m_name.toUtf8().toHex())).arg(m_generation);
 }
 
 qreal LensScreen::toLogical() const

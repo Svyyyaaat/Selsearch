@@ -9,7 +9,7 @@
 namespace selsearch {
 
 // Holds the frozen screen images for the current lens session and serves them
-// to QML as image://frame/<screen>/<gen>.
+// to QML as image://frame/<hex of the screen name>/<gen>.
 class FrameStore : public QQuickImageProvider {
 public:
     FrameStore();

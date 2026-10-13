@@ -1,4 +1,4 @@
-First public build of Selsearch: freeze the screen, select text or part of an image, then copy, translate, search or ask a local AI about it. Plus an Alt+Space launcher.
+Selsearch: freeze the screen, select text or part of an image, then copy, translate, search or ask a local AI about it. Plus an Alt+Space launcher.
 
 ## Downloads
 

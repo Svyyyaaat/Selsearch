@@ -493,7 +493,23 @@ ApplicationWindow {
         id: scr
         property string key
         property bool recording: false
-        subtitle: recording ? qsTr("Press the new keys… (Esc to cancel, Backspace for default)") : ""
+        readonly property string error: win.settings.shortcutErrors[key.split(".")[1]] || ""
+        subtitle: recording ? qsTr("Press the new keys… (Esc to cancel, Backspace for default)")
+                  : error ? qsTr("Not active: %1").arg(error) : ""
+        // Windows: keys come from a system keyboard hook, so Alt and Win
+        // combinations reach us instead of opening menus.
+        onRecordingChanged: if (win.settings.nativeKeyCapture) win.settings.setKeyCapture(recording)
+        function finish(sequence) {
+            if (sequence === "Esc") { recording = false; return }
+            if (sequence === "Backspace") { win.cfg.reset(key); recording = false; return }
+            win.set(key, sequence)
+            recording = false
+        }
+        Connections {
+            target: win.settings
+            enabled: scr.recording && win.settings.nativeKeyCapture
+            function onKeysCaptured(sequence) { scr.finish(sequence) }
+        }
         Rectangle {
             id: keyBox
             width: 220
@@ -517,14 +533,10 @@ ApplicationWindow {
                 Keys.onPressed: (event) => {
                     if (!scr.recording) return
                     event.accepted = true
+                    if (win.settings.nativeKeyCapture) return
                     const mods = [Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta, Qt.Key_Super_L, Qt.Key_Super_R, Qt.Key_AltGr]
                     if (mods.indexOf(event.key) >= 0) return   // wait for the actual key
-                    if (event.key === Qt.Key_Escape && event.modifiers === Qt.NoModifier) { scr.recording = false; return }
-                    if (event.key === Qt.Key_Backspace && event.modifiers === Qt.NoModifier) {
-                        win.cfg.reset(scr.key); scr.recording = false; return
-                    }
-                    win.set(scr.key, win.settings.sequenceFor(event.key, event.modifiers))
-                    scr.recording = false
+                    scr.finish(win.settings.sequenceFor(event.key, event.modifiers))
                 }
             }
         }

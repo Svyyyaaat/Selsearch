@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QVariantList>
+#include <QVariantMap>
 
 class QQmlEngine;
 class QQuickWindow;
@@ -34,6 +35,10 @@ class Settings : public QObject {
     Q_PROPERTY(bool welcome READ welcome NOTIFY welcomeChanged)
     // "inapp" (Windows), "portal" (KDE/GNOME), "hyprland", "sway", "other"
     Q_PROPERTY(QString shortcutMode READ shortcutMode CONSTANT)
+    // The recorder takes keys from the platform (Windows), not Qt key events.
+    Q_PROPERTY(bool nativeKeyCapture READ nativeKeyCapture NOTIFY shortcutStateChanged)
+    // shortcut id ("lens") -> why it could not be registered
+    Q_PROPERTY(QVariantMap shortcutErrors READ shortcutErrors NOTIFY shortcutStateChanged)
 public:
     Settings(Config &config, OcrService &ocr, QObject *parent = nullptr);
     void setEngine(QQmlEngine *engine);
@@ -67,11 +72,21 @@ public:
     Q_INVOKABLE QString displayKeys(const QString &sequence) const;
     Q_INVOKABLE void copy(const QString &text);
 
+    bool nativeKeyCapture() const { return m_nativeKeyCapture; }
+    void setNativeKeyCapture(bool on);
+    QVariantMap shortcutErrors() const { return m_shortcutErrors; }
+    void setShortcutError(const QString &id, const QString &reason);  // empty reason clears
+    // QML recorder: start/stop native capture; results come as keysCaptured().
+    Q_INVOKABLE void setKeyCapture(bool on) { Q_EMIT keyCaptureRequested(on); }
+
 Q_SIGNALS:
     void aiModelsChanged();
     void aiStatusChanged();
     void ocrStatusChanged();
     void welcomeChanged();
+    void shortcutStateChanged();
+    void keyCaptureRequested(bool on);
+    void keysCaptured(const QString &sequence);
 
 private:
     Config &m_config;
@@ -85,6 +100,8 @@ private:
     bool m_welcome = false;
     QString m_ocrProgress;
     double m_ocrFraction = 0;
+    bool m_nativeKeyCapture = false;
+    QVariantMap m_shortcutErrors;
 };
 
 }  // namespace selsearch
