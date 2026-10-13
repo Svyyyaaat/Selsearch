@@ -52,6 +52,7 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("translate.target"), QString()},                // empty = system language
         {QStringLiteral("translate.libretranslate_url"), QStringLiteral("http://localhost:5000")},
         {QStringLiteral("translate.libretranslate_key"), QString()},
+        {QStringLiteral("translate.recent"), QStringList()},  // recently used targets, newest first (max 3)
 
         // AI
         {QStringLiteral("ai.enabled"), true},

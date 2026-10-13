@@ -42,7 +42,10 @@ public:
 //  - "bergamot":      Firefox Translations models through the translateLocally CLI (local)
 //  - "libretranslate": a LibreTranslate HTTP server (usually self-hosted)
 //  - "llm":           any OpenAI-compatible chat endpoint (ai.* config)
-// "auto" picks the first available in the order above.
+// "auto" picks the first available in the order above (see TranslatorFactory.cpp).
+// The unique_ptr owns the translator. If `parent` is given it must outlive the
+// returned object (or release() it to hand ownership to the parent).
+// The concrete backends are declared in TranslatorBackends.h.
 std::unique_ptr<Translator> createTranslator(const Config &config, QObject *parent = nullptr);
 
 }  // namespace selsearch
