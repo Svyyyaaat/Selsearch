@@ -5,6 +5,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a GitHub release with this tag (e.g. v0.1.0); empty: just build"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -57,6 +62,9 @@ jobs:
           curl -sSL -o /tmp/ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz"
           sudo mkdir -p /opt/onnxruntime
           sudo tar -xzf /tmp/ort.tgz -C /opt/onnxruntime --strip-components=1
+          # Its CMake config expects lib64/ and include/onnxruntime/.
+          sudo ln -s lib /opt/onnxruntime/lib64
+          sudo ln -s . /opt/onnxruntime/include/onnxruntime
 
       - name: Configure
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR;/opt/kde;/opt/onnxruntime"
@@ -145,3 +153,46 @@ jobs:
         with:
           name: Selsearch-windows-x64-setup
           path: packaging/windows/Selsearch-*-setup.exe
+
+  fedora:
+    runs-on: ubuntu-24.04
+    container: fedora:43
+    steps:
+      - name: git
+        run: dnf -y -q install git-core
+
+      - uses: actions/checkout@v4.2.2
+
+      - name: RPM
+        run: |
+          version=$(sed -n 's/^project(selsearch VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          packaging/fedora/build-rpm.sh "$version"
+
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: Selsearch-fedora-x86_64
+          path: dist/*.rpm
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
+    needs: [linux, windows, fedora]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release || github.ref_name }}
+        run: |
+          ls -l assets
+          sed "s/@TAG@/$TAG/g" packaging/release-notes.md > notes.md
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "Selsearch $TAG" \
+            --notes-file notes.md --prerelease assets/*
