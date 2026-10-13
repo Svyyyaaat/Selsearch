@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Selsearch
+GenericName=Screen Search
+Comment=Select anything on screen to copy, translate, search or ask about it
+Exec=selsearch launcher
+Icon=system-search
+Categories=Utility;
+Keywords=search;ocr;lens;translate;launcher;
+Actions=lens;settings;
+
+[Desktop Action lens]
+Name=Search the screen
+Exec=selsearch lens
+
+[Desktop Action settings]
+Name=Settings
+Exec=selsearch config

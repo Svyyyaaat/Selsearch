@@ -1,0 +1,13 @@
+find_package(Qt6 REQUIRED COMPONENTS Test)
+file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tst_*.cpp)
+foreach(src ${TEST_SOURCES})
+    get_filename_component(name ${src} NAME_WE)
+    add_executable(${name} ${src})
+    target_link_libraries(${name} PRIVATE selsearch_core Qt6::Test)
+    target_compile_definitions(${name} PRIVATE SELSEARCH_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endforeach()
+
+add_executable(selsearch-capture-dump tools/capture_dump.cpp)
+target_link_libraries(selsearch-capture-dump PRIVATE selsearch_core)
