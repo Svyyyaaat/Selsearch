@@ -11,3 +11,6 @@ endforeach()
 
 add_executable(selsearch-capture-dump tools/capture_dump.cpp)
 target_link_libraries(selsearch-capture-dump PRIVATE selsearch_core)
+
+add_executable(selsearch-ocr-dump tools/ocr_dump.cpp)
+target_link_libraries(selsearch-ocr-dump PRIVATE selsearch_core Qt6::Gui)
