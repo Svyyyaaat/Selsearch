@@ -11,6 +11,7 @@
 
 #include <leptonica/allheaders.h>
 #include <tesseract/baseapi.h>
+#include <tesseract/ocrclass.h>
 
 #include <memory>
 
@@ -114,8 +115,12 @@ public:
         const QImage img = normaliseForTesseract(input, factor);
         m_api->SetImage(img.constBits(), img.width(), img.height(), 1, int(img.bytesPerLine()));
         m_api->SetSourceResolution(144);
-        if (m_api->Recognize(nullptr) != 0) {
-            result.error = QStringLiteral("tesseract recognition failed");
+        tesseract::ETEXT_DESC monitor;
+        monitor.cancel = [](void *self, int) { return static_cast<TesseractEngine *>(self)->cancelled(); };
+        monitor.cancel_this = this;
+        if (m_api->Recognize(&monitor) != 0 || cancelled()) {
+            m_api->Clear();
+            result.error = cancelled() ? QStringLiteral("cancelled") : QStringLiteral("tesseract recognition failed");
             return result;
         }
         std::unique_ptr<tesseract::ResultIterator> it(m_api->GetIterator());

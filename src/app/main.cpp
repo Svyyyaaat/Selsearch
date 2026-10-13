@@ -8,9 +8,12 @@
 #include <QGuiApplication>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSocketNotifier>
 
 #include <csignal>
 #include <cstdio>
+#include <fcntl.h>
+#include <unistd.h>
 
 int main(int argc, char **argv)
 {
@@ -27,8 +30,21 @@ int main(int argc, char **argv)
     QGuiApplication::setQuitOnLastWindowClosed(false);
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
-    std::signal(SIGINT, [](int) { QCoreApplication::quit(); });
-    std::signal(SIGTERM, [](int) { QCoreApplication::quit(); });
+    // Quit cleanly on SIGINT/SIGTERM (systemd stop) via a self-pipe; only
+    // async-signal-safe work happens in the handler itself.
+    static int signalPipe[2];
+    if (::pipe2(signalPipe, O_CLOEXEC | O_NONBLOCK) == 0) {
+        auto *notifier = new QSocketNotifier(signalPipe[0], QSocketNotifier::Read, &app);
+        QObject::connect(notifier, &QSocketNotifier::activated, &app, [] { QCoreApplication::quit(); });
+        struct sigaction sa = {};
+        sa.sa_handler = [](int) {
+            const char c = 1;
+            [[maybe_unused]] auto r = ::write(signalPipe[1], &c, 1);
+        };
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGINT, &sa, nullptr);
+        sigaction(SIGTERM, &sa, nullptr);
+    }
 
     selsearch::App selsearchApp;
     QString error;

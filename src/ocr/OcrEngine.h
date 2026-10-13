@@ -7,6 +7,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
 #include <memory>
 
 namespace selsearch {
@@ -48,6 +49,14 @@ public:
     // Release models/memory. The next recognize() call reloads lazily.
     virtual void unload() {}
     virtual bool isAvailable() const = 0;
+
+    // Long-running engines poll this and return early (with an error) once it
+    // returns true. Set by OcrService before each recognize() call.
+    void setCancelCheck(std::function<bool()> check) { m_cancelCheck = std::move(check); }
+
+protected:
+    bool cancelled() const { return m_cancelCheck && m_cancelCheck(); }
+    std::function<bool()> m_cancelCheck;
 };
 
 // Factory functions. Return nullptr when the engine was not compiled in.

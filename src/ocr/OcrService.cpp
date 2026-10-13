@@ -31,7 +31,6 @@ OcrService::OcrService(const Config &config, QObject *parent)
     , m_tesseract(createTesseractOcrEngine())
 {
     m_pool.setMaxThreadCount(1);
-    m_pool.setExpiryTimeout(-1);
     m_unloadTimer.setSingleShot(true);
     connect(&m_unloadTimer, &QTimer::timeout, this, [this] {
         // Unload on the worker so it never races a running recognition.
@@ -47,6 +46,8 @@ OcrService::OcrService(const Config &config, QObject *parent)
 
 OcrService::~OcrService()
 {
+    m_shutdown = true;  // running engines notice and stop early
+    m_pool.clear();     // queued requests never start
     m_pool.waitForDone();
 }
 
@@ -70,7 +71,7 @@ OcrEngine *OcrService::pickEngine(const QStringList &)
     return paddle ? paddle : tess;
 }
 
-QFuture<OcrResult> OcrService::recognize(const QImage &image, const QStringList &languages)
+QFuture<OcrResult> OcrService::recognize(const QImage &image, const QStringList &languages, CancelToken cancel)
 {
     const QStringList langs = languages.isEmpty() ? effectiveOcrLanguages(m_config) : languages;
     OcrEngine *engine = pickEngine(langs);
@@ -81,11 +82,18 @@ QFuture<OcrResult> OcrService::recognize(const QImage &image, const QStringList 
         r.error = QStringLiteral("no OCR engine available (install onnxruntime models or tesseract)");
         return QtFuture::makeReadyValueFuture(r);
     }
-    return QtConcurrent::run(&m_pool, [this, engine, image, langs] {
+    return QtConcurrent::run(&m_pool, [this, engine, image, langs, cancel] {
+        if (cancel && cancel->load()) {
+            OcrResult r;
+            r.error = QStringLiteral("cancelled");
+            return r;
+        }
         std::lock_guard lock(m_mutex);
+        engine->setCancelCheck([this, cancel] { return m_shutdown.load() || (cancel && cancel->load()); });
         QElapsedTimer t;
         t.start();
         OcrResult r = engine->recognize(image, langs);
+        engine->setCancelCheck({});
         r.engine = engine->id();
         r.elapsedMs = t.elapsed();
         return r;

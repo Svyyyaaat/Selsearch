@@ -8,6 +8,7 @@
 #include <QThreadPool>
 #include <QTimer>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 
@@ -25,8 +26,11 @@ public:
 
     static QString modelDir();  // $XDG_DATA_HOME/selsearch/models/ppocr
 
+    // Set to true to drop a queued request before it starts.
+    using CancelToken = std::shared_ptr<std::atomic_bool>;
+
     // `languages` empty = effectiveOcrLanguages(config).
-    QFuture<OcrResult> recognize(const QImage &image, const QStringList &languages = {});
+    QFuture<OcrResult> recognize(const QImage &image, const QStringList &languages = {}, CancelToken cancel = {});
     QStringList availableEngines() const;
 
 private:
@@ -36,7 +40,8 @@ private:
     const Config &m_config;
     QThreadPool m_pool;
     QTimer m_unloadTimer;
-    std::mutex m_mutex;  // guards engine use across the (single) worker and unload
+    std::mutex m_mutex;
+    std::atomic_bool m_shutdown{false};  // guards engine use across the (single) worker and unload
     std::unique_ptr<OcrEngine> m_paddle;
     std::unique_ptr<OcrEngine> m_tesseract;
 };

@@ -12,6 +12,7 @@
 #include <QRect>
 #include <QVariantList>
 
+#include <atomic>
 #include <memory>
 
 class QQuickWindow;
@@ -172,6 +173,7 @@ private:
     QString m_mode;
     QString m_activeScreen;
     int m_generation = 0;
+    std::shared_ptr<std::atomic_bool> m_ocrCancel;
 };
 
 }  // namespace selsearch

@@ -319,6 +319,9 @@ void LensController::start(const QString &mode)
         m_active = true;
         Q_EMIT activeChanged();
         showWindows();
+        if (m_ocrCancel)
+            m_ocrCancel->store(true);
+        m_ocrCancel = std::make_shared<std::atomic_bool>(false);
         if (recognizeText()) {
             // Focused screen first; the worker runs them in order.
             if (auto *f = find(focusedScreen))
@@ -357,6 +360,8 @@ void LensController::close()
     if (!m_active)
         return;
     m_active = false;
+    if (m_ocrCancel)
+        m_ocrCancel->store(true);
     hideWindows();
     Q_EMIT activeChanged();
     // Free the frames once the windows are gone; keep memory low while idle.
@@ -395,7 +400,8 @@ void LensController::runOcr(LensScreen *s)
         s->m_ocrBusy = false;
         Q_EMIT s->ocrBusyChanged();
         if (!r.ok()) {
-            qCWarning(lcLens) << "OCR failed:" << r.error;
+            if (r.error != QLatin1String("cancelled"))
+                qCWarning(lcLens) << "OCR failed:" << r.error;
             return;
         }
         qCDebug(lcLens) << "OCR" << s->name() << r.engine << r.elapsedMs << "ms," << r.lines.size() << "lines";
@@ -413,7 +419,7 @@ void LensController::runOcr(LensScreen *s)
         s->m_words = words;
         Q_EMIT s->wordsChanged();
     });
-    watcher->setFuture(m_ocr.recognize(frame));
+    watcher->setFuture(m_ocr.recognize(frame, {}, m_ocrCancel));
 }
 
 QImage LensController::crop(const QString &screen, const QRectF &rect) const
