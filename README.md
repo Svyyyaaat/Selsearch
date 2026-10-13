@@ -14,7 +14,7 @@ or point it at a remote AI.
 **Lens** (`selsearch lens`)
 - Freezes every monitor instantly (direct compositor capture, correct with
   fractional scaling and rotated outputs).
-- Drag a rectangle, **circle/scribble** (snaps to a box), or **click a window**.
+- Drag a rectangle or **click a window**.
 - Text on screen is recognised in the background the moment the lens opens:
   **drag across words to select them** like normal text, double-click selects a
   line, Ctrl+A selects all.
@@ -57,34 +57,16 @@ or point it at a remote AI.
 
 ## Install
 
-Arch: `packaging/arch/PKGBUILD` (AUR-ready, `selsearch-git`).
+See **[INSTALL.md](INSTALL.md)** for Fedora, Arch, Debian/Ubuntu and Windows,
+first-run setup, shortcuts per desktop, updating and troubleshooting.
 
-From source (Qt ≥ 6.8, layer-shell-qt ≥ 6.0, wayland, onnxruntime and/or
-tesseract; qt6-webengine optional):
+Short version (Fedora/Arch, once dependencies are installed):
 
 ```sh
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
 cmake --build build && sudo cmake --install build
-systemctl --user enable --now selsearch.service   # or start selsearchd from your compositor
+systemctl --user enable --now selsearch.service && selsearch config
 ```
-
-Then bind the keys. Hyprland 0.55+ (`~/.config/hypr/hyprland.lua`):
-
-```lua
-hl.bind("ALT + Space", hl.dsp.exec_cmd("selsearch launcher"))
-hl.bind("SUPER + S", hl.dsp.exec_cmd("selsearch lens"))
-hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd("selsearch lens --text"))
--- the overlay shows a frozen screen: no open/close animation
-hl.layer_rule({ match = { namespace = "selsearch-lens" }, name = "selsearch-lens", no_anim = true })
-```
-
-sway/river/niri: `bindsym Mod1+space exec selsearch launcher` etc.
-KDE/GNOME: add custom shortcuts running the same commands (capture goes through
-the xdg-desktop-portal Screenshot API there; GNOME has no layer-shell, so the
-overlay is best on wlroots compositors and KDE).
-
-On first start Selsearch opens a short welcome page; `selsearch config` opens
-the settings. Every option is also a key in `~/.config/selsearch/config.toml`.
 
 ## How it works
 

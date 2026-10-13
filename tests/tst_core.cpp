@@ -2,6 +2,7 @@
 #include "capture/ImageTransform.h"
 #include "compositor/Compositor.h"
 #include "core/Config.h"
+#include "platform/KeyNames.h"
 #include "ocr/OcrEngine.h"
 
 #include <QTemporaryDir>
@@ -107,6 +108,19 @@ private Q_SLOTS:
     {
         QCOMPARE(parseFocusedOutput(R"([{"name":"DP-1","focused":false},{"name":"HDMI-A-1","focused":true}])"), QStringLiteral("HDMI-A-1"));
         QCOMPARE(parseFocusedOutput("[]"), QString());
+    }
+
+    void keyNames()
+    {
+        const QKeySequence lens(QStringLiteral("Meta+Shift+S"));
+        QCOMPARE(toXdgTrigger(lens), QStringLiteral("SHIFT+LOGO+s"));
+        QCOMPARE(toHyprlandKeys(lens), QStringLiteral("SUPER + SHIFT + S"));
+        QCOMPARE(toSwayKeys(lens), QStringLiteral("Mod4+Shift+s"));
+        QCOMPARE(toDisplayKeys(lens), QStringLiteral("Super + Shift + S"));
+        const QKeySequence launcher(QStringLiteral("Alt+Space"));
+        QCOMPARE(toHyprlandKeys(launcher), QStringLiteral("ALT + Space"));
+        QCOMPARE(toSwayKeys(launcher), QStringLiteral("Mod1+space"));
+        QCOMPARE(toXdgTrigger(launcher), QStringLiteral("ALT+space"));
     }
 
     void outputTransform()

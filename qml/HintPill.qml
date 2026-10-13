@@ -32,7 +32,7 @@ Rectangle {
             color: "#eceef4"
             font.pixelSize: 13
             text: root.textMode ? qsTr("Drag across text to select it  ·  Ctrl+A selects all  ·  Esc to close")
-                                : qsTr("Drag or circle to select  ·  Click a window  ·  Drag over text to select it  ·  Esc to close")
+                                : qsTr("Drag to select  ·  Click a window  ·  Drag over text to select it  ·  Esc to close")
         }
     }
 }

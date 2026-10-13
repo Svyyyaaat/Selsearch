@@ -2,6 +2,7 @@
 #include "LensController.h"
 
 #include "FrameStore.h"
+#include "app/WindowPlacement.h"
 #include "compositor/Compositor.h"
 #include "core/Accent.h"
 #include "core/Config.h"
@@ -22,8 +23,6 @@
 #include <QTimer>
 #include <QUrl>
 #include <QtConcurrent>
-
-#include <LayerShellQt/Window>
 
 #include <algorithm>
 
@@ -78,7 +77,7 @@ QColor backgroundAround(const QImage &img, const QRect &box)
 LensScreen::LensScreen(QScreen *screen, QObject *parent)
     : QObject(parent)
     , m_screen(screen)
-    , m_name(screen->name())
+    , m_name(screenName(screen))
 {
 }
 
@@ -197,16 +196,7 @@ void LensController::createWindow(LensScreen *s)
         delete obj;
         return;
     }
-    window->setScreen(s->screen());
-    window->setGeometry(s->screen()->geometry());
-    if (auto *layer = LayerShellQt::Window::get(window)) {
-        layer->setLayer(LayerShellQt::Window::LayerOverlay);
-        layer->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop | LayerShellQt::Window::AnchorBottom
-                                                        | LayerShellQt::Window::AnchorLeft | LayerShellQt::Window::AnchorRight));
-        layer->setExclusiveZone(-1);
-        layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
-        layer->setScope(QStringLiteral("selsearch-lens"));
-    }
+    setupLensWindow(window, s->screen());
     s->window = window;
 }
 
@@ -328,12 +318,10 @@ void LensController::showWindows()
     for (auto *s : std::as_const(m_screens)) {
         if (!s->window)
             continue;
-        if (auto *layer = LayerShellQt::Window::get(s->window))
-            layer->setKeyboardInteractivity(s->focused() ? LayerShellQt::Window::KeyboardInteractivityExclusive
-                                                         : LayerShellQt::Window::KeyboardInteractivityOnDemand);
+        prepareLensWindow(s->window, s->screen(), s->focused());
         s->window->show();
         if (s->focused())
-            s->window->requestActivate();
+            activateWindow(s->window);
     }
 }
 

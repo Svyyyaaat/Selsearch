@@ -4,9 +4,6 @@
 #include "FuzzyMatcher.h"
 #include "Launch.h"
 
-#include <QDBusConnection>
-#include <QDBusMessage>
-#include <QDBusPendingCallWatcher>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
@@ -21,10 +18,20 @@
 #include <deque>
 #include <vector>
 
+#ifdef Q_OS_WIN
+#include "WindowsApps.h"
+
+#include <windows.h>
+#else
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
+
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace selsearch {
 
@@ -201,6 +208,48 @@ void FilesProvider::refresh()
             break;
         const Pending cur = std::move(queue.front());
         queue.pop_front();
+#ifdef Q_OS_WIN
+        // FindFirstFileEx with the basic info level skips 8.3 names and fetches
+        // large batches; it is the fastest plain directory listing on NTFS.
+        const std::wstring pattern = QDir::toNativeSeparators(cur.path + QStringLiteral("/*")).toStdWString();
+        WIN32_FIND_DATAW fd;
+        HANDLE find = FindFirstFileExW(pattern.c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
+        if (find == INVALID_HANDLE_VALUE)
+            continue;
+        const qint32 parentIdx = qint32(index->dirs.size());
+        index->dirs << cur.path;
+        do {
+            if (fd.cFileName[0] == L'.')  // dotfiles, "." and ".."
+                continue;
+            // Hidden/system: AppData, desktop.ini, the profile's legacy junctions.
+            if (fd.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM))
+                continue;
+            Index::Node node;
+            node.name = QString::fromWCharArray(fd.cFileName);
+            const QString folded = foldForMatch(node.name);
+            node.folded = folded == node.name ? node.name : folded;
+            // FILETIME: 100 ns ticks since 1601.
+            const quint64 ticks = (quint64(fd.ftLastWriteTime.dwHighDateTime) << 32) | fd.ftLastWriteTime.dwLowDateTime;
+            node.mtime = qint64(ticks / 10000000ULL) - 11644473600LL;
+            node.parent = parentIdx;
+            node.depth = quint8(std::min(cur.depth, 255));
+            node.dir = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+            // Junctions and symlinks are listed but not followed (loops);
+            // cloud placeholder folders (OneDrive) are ordinary to walk.
+            const bool link = (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+                && (fd.dwReserved0 == IO_REPARSE_TAG_MOUNT_POINT || fd.dwReserved0 == IO_REPARSE_TAG_SYMLINK);
+            const QString child = cur.path + QLatin1Char('/') + node.name;
+            if (node.dir && !link && cur.depth + 1 < m_options.maxDepth && !isSkippedDir(node.name)
+                && GetFileAttributesW(QDir::toNativeSeparators(child + QStringLiteral("/CACHEDIR.TAG")).toStdWString().c_str())
+                    == INVALID_FILE_ATTRIBUTES) {
+                queue.push_back({child, cur.depth + 1});
+            }
+            index->nodes.push_back(std::move(node));
+            if (index->nodes.size() >= size_t(m_options.maxEntries))
+                break;
+        } while (FindNextFileW(find, &fd));
+        FindClose(find);
+#else
         const QByteArray encoded = QFile::encodeName(cur.path);
         const int dfd = ::open(encoded.constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
         if (dfd < 0)
@@ -236,6 +285,7 @@ void FilesProvider::refresh()
                 break;
         }
         ::closedir(dir);  // also closes dfd
+#endif
         // Until the first full index exists, let queries see partial results.
         if (!hadComplete && qsizetype(index->nodes.size()) >= nextPublish) {
             publish(false);
@@ -408,12 +458,17 @@ QList<LauncherItem> FilesProvider::finish(QList<Candidate> &candidates, int limi
         if (parent == home || parent.startsWith(home + QLatin1Char('/')))
             parent = QLatin1Char('~') + parent.mid(home.size());
         item.subtitle = parent;
+#ifdef Q_OS_WIN
+        // No freedesktop icon theme on Windows: the shell's icon for the file.
+        item.icon = winshell::iconId(c.path);
+#else
         if (c.dir) {
             item.icon = QStringLiteral("folder");
         } else {
             const QMimeType mime = mimeDb.mimeTypeForFile(c.name, QMimeDatabase::MatchExtension);
             item.icon = mime.isDefault() ? QStringLiteral("lucide:file") : mime.iconName();
         }
+#endif
         item.group = QStringLiteral("Files");
         item.score = c.score;
         item.data.insert(QStringLiteral("path"), c.path);
@@ -426,6 +481,9 @@ QList<LauncherItem> FilesProvider::finish(QList<Candidate> &candidates, int limi
 
 static bool openPath(const QString &path)
 {
+#ifdef Q_OS_WIN
+    return winshell::open(path);
+#endif
     if (!QStandardPaths::findExecutable(QStringLiteral("xdg-open")).isEmpty())
         return launchDetached({QStringLiteral("xdg-open"), path}, QFileInfo(path).absolutePath(), QStringLiteral("xdg-open"));
     return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
@@ -447,6 +505,9 @@ bool FilesProvider::activateAction(const LauncherItem &item, const QString &acti
     const QString parent = QFileInfo(path).absolutePath();
     if (!QFileInfo(parent).isDir())
         return false;
+#ifdef Q_OS_WIN
+    return winshell::reveal(path);
+#else
     // Ask the file manager to reveal and select the item; fall back to just
     // opening the folder when no FileManager1 implementation answers.
     QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.FileManager1"),
@@ -464,6 +525,7 @@ bool FilesProvider::activateAction(const LauncherItem &item, const QString &acti
         w->deleteLater();
     });
     return true;
+#endif
 }
 
 }  // namespace selsearch

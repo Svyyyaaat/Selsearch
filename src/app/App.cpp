@@ -11,7 +11,12 @@
 #include "ocr/OcrService.h"
 #include "overlay/FrameStore.h"
 #include "overlay/LensController.h"
+#include "platform/GlobalShortcuts.h"
 #include "translate/Translator.h"
+
+#ifdef Q_OS_WIN
+#include "WindowsIntegration.h"
+#endif
 
 #include <QCursor>
 #include <QDesktopServices>
@@ -36,6 +41,10 @@ App::App(QObject *parent)
 
 App::~App()
 {
+    m_shortcuts.reset();
+#ifdef Q_OS_WIN
+    m_tray.reset();
+#endif
     // Windows reference the controllers; tear down the UI first.
     m_settings.reset();
     m_launcher.reset();
@@ -103,8 +112,83 @@ bool App::init(QString *error)
         m_launcher->askAbout(image, text);
     });
 
+    // System-wide hotkeys owned by the app (where the platform allows it).
+    m_shortcuts = createGlobalShortcuts();
+    connect(m_shortcuts.get(), &GlobalShortcuts::activated, this, &App::onShortcut);
+    connect(m_shortcuts.get(), &GlobalShortcuts::failed, this, [](const QString &id, const QString &reason) {
+        qCWarning(lcApp) << "shortcut" << id << "not registered:" << reason;
+    });
+    connect(m_config.get(), &Config::changed, this, [this](const QString &key) {
+        if (key.startsWith(QLatin1String("shortcuts.")))
+            applyShortcuts();
+    });
+    connect(m_config.get(), &Config::reloaded, this, &App::applyShortcuts);
+    applyShortcuts();
+
+#ifdef Q_OS_WIN
+    // No systemd or compositor config here: a tray icon, and autostart
+    // through the registry when the user turns it on.
+    m_tray = std::make_unique<WindowsTray>();
+    connect(m_tray.get(), &WindowsTray::launcherRequested, this, [this] {
+        // Show, not toggle: clicking the tray already took focus from it.
+        if (m_lens->active())
+            m_lens->close();
+        m_launcher->show();
+    });
+    connect(m_tray.get(), &WindowsTray::lensRequested, this, [this] { onShortcut(QStringLiteral("lens")); });
+    connect(m_tray.get(), &WindowsTray::settingsRequested, m_settings.get(), &Settings::show);
+    setStartWithWindows(m_config->boolean(QStringLiteral("general.autostart")));
+    connect(m_config.get(), &Config::changed, this, [this](const QString &key) {
+        if (key == QLatin1String("general.autostart"))
+            setStartWithWindows(m_config->boolean(key));
+    });
+#endif
+
     m_ipc->setHandler([this](const QJsonObject &req, const IpcServer::Reply &reply) { handle(req, reply); });
     return true;
+}
+
+void App::applyShortcuts()
+{
+    if (!m_shortcuts)
+        return;
+    const QList<GlobalShortcuts::Shortcut> list{
+        {QStringLiteral("launcher"), tr("Open the Selsearch launcher"), QKeySequence(m_config->string(QStringLiteral("shortcuts.launcher")))},
+        {QStringLiteral("lens"), tr("Search the screen"), QKeySequence(m_config->string(QStringLiteral("shortcuts.lens")))},
+        {QStringLiteral("lens_text"), tr("Select text on the screen"), QKeySequence(m_config->string(QStringLiteral("shortcuts.lens_text")))},
+    };
+    m_shortcuts->setShortcuts(list);
+#ifdef Q_OS_WIN
+    if (m_tray) {
+        // Short: Windows cuts tray tooltips at 127 characters.
+        const QStringList labels{tr("launcher"), tr("search screen"), tr("select text")};
+        QStringList lines;
+        for (qsizetype i = 0; i < list.size(); ++i)
+            if (!list[i].keys.isEmpty())
+                lines << QStringLiteral("%1 · %2").arg(list[i].keys.toString(QKeySequence::NativeText), labels.value(i));
+        m_tray->setToolTip(lines.join(QLatin1Char('\n')));
+    }
+#endif
+}
+
+void App::onShortcut(const QString &id)
+{
+    if (id == QLatin1String("launcher")) {
+        if (m_lens->active())
+            m_lens->close();
+        m_launcher->toggle();
+        return;
+    }
+    if (id != QLatin1String("lens") && id != QLatin1String("lens_text"))
+        return;
+    const QString mode = id == QLatin1String("lens_text") ? QStringLiteral("text") : QStringLiteral("region");
+    if (m_launcher->shown()) {
+        // Let the launcher unmap so it is not in the frozen frame.
+        m_launcher->hide();
+        QTimer::singleShot(160, this, [this, mode] { m_lens->start(mode); });
+        return;
+    }
+    m_lens->start(mode);
 }
 
 void App::openUrl(const QUrl &url, const QString &title)

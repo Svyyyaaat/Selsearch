@@ -19,16 +19,40 @@ Window {
         function onOpenRequested(url, title) {
             win.pageTitle = title
             view.url = url
-            sheet.opacity = 1
-            sheet.scale = 1
+            closeAnim.stop()
+            openAnim.restart()
         }
         function onHideRequested() { win.dismiss() }
     }
 
+    // Close: animate out, then unmap.
     function dismiss() {
+        if (!win.visible || closeAnim.running)
+            return
+        openAnim.stop()
+        closeAnim.restart()
+    }
+    function finishDismiss() {
         win.hide()
         view.url = "about:blank"
         bridge.emitEvent("hidden")
+    }
+
+    // Open: drop in from slightly above with a soft overshoot.
+    ParallelAnimation {
+        id: openAnim
+        NumberAnimation { target: sheet; property: "opacity"; from: 0; to: 1; duration: 180; easing.type: Easing.OutCubic }
+        NumberAnimation { target: sheetShift; property: "y"; from: -24; to: 0; duration: 340; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
+        NumberAnimation { target: sheet; property: "scale"; from: 0.97; to: 1; duration: 340; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
+    }
+    SequentialAnimation {
+        id: closeAnim
+        ParallelAnimation {
+            NumberAnimation { target: sheet; property: "opacity"; to: 0; duration: 140; easing.type: Easing.InCubic }
+            NumberAnimation { target: sheetShift; property: "y"; to: -14; duration: 160; easing.type: Easing.InCubic }
+            NumberAnimation { target: sheet; property: "scale"; to: 0.98; duration: 160; easing.type: Easing.InCubic }
+        }
+        ScriptAction { script: win.finishDismiss() }
     }
 
     onActiveChanged: if (!active && visible && !menuOpen) dismiss()
@@ -55,9 +79,8 @@ Window {
             color: "#16171b"
             border.color: Qt.rgba(1, 1, 1, 0.08)
             opacity: 0
-            scale: 0.985
-            Behavior on opacity { NumberAnimation { duration: 160 } }
-            Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+            scale: 0.97
+            transform: Translate { id: sheetShift }
             layer.enabled: true
             layer.effect: MultiEffect {
                 shadowEnabled: true
@@ -79,7 +102,7 @@ Window {
                 }
                 Text {
                     anchors.centerIn: parent
-                    width: parent.width - 260
+                    width: parent.width - 420
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideMiddle
                     color: "#c9ccd6"
@@ -89,7 +112,31 @@ Window {
                 Row {
                     anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
                     spacing: 4
-                    HeaderButton { glyph: "↗"; tip: qsTr("Open in browser"); onClicked: { bridge.emitEvent("openExternal", view.url.toString()); win.dismiss() } }
+                    // Explicit, labelled: the main way out of the panel.
+                    AbstractButton {
+                        id: openExternal
+                        height: 32
+                        width: openRow.implicitWidth + 24
+                        hoverEnabled: true
+                        onClicked: { bridge.emitEvent("openExternal", view.url.toString()); win.dismiss() }
+                        background: Rectangle {
+                            radius: 16
+                            color: openExternal.down ? Qt.rgba(1, 1, 1, 0.16) : openExternal.hovered ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(1, 1, 1, 0.05)
+                            border.color: Qt.rgba(1, 1, 1, 0.10)
+                        }
+                        contentItem: Item {
+                            Row {
+                                id: openRow
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Text { anchors.verticalCenter: parent.verticalCenter; text: "↗"; color: "#e6e8ef"; font.pixelSize: 14 }
+                                Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Open in browser"); color: "#e6e8ef"; font.pixelSize: 13 }
+                            }
+                        }
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 600
+                        ToolTip.text: qsTr("Ctrl+L")
+                    }
                     HeaderButton { glyph: "✕"; tip: qsTr("Close  (Esc)"); onClicked: win.dismiss() }
                 }
                 Rectangle {

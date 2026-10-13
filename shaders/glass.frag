@@ -18,6 +18,7 @@ layout(std140, binding = 0) uniform buf {
     float rimAlpha;  // base rim opacity
     float rimWidth;  // rim thickness in pixels
     float wave;      // 0..1 progress of the release ripple, < 0 = off
+    float pulse;     // 0..1 progress of the "text is ready" edge flash, < 0 = off
     float time;      // seconds, drives shimmer / edge glow
     float dots;      // 0 = no dot field (mono), 1 = full
     float spacing;   // dot grid pitch in pixels
@@ -81,6 +82,12 @@ void main()
         float around = atan(cc.y - 0.5 * size.y, cc.x - 0.5 * size.x);
         float bands = 0.5 + 0.5 * sin(around * 3.0 - time * 0.9);
         intensity += edge * (0.3 + 0.75 * bands * bands) * shimmer * (1.0 - 0.45 * focusAmt);
+        if (pulse >= 0.0) {
+            // Quick rise, slower fall; reaches a little further in than the glow.
+            float env = sin(PI * sqrt(pulse)) * (1.0 - pulse * 0.3);
+            float reach = exp(-edgeDist / (spacing * 9.0));
+            intensity += reach * env * 1.3;
+        }
 
         if (hasSel > 0.5 && dd > 0.0) {
             // Halo hugging the selection edge.

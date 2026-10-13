@@ -9,7 +9,8 @@
 
 namespace selsearch {
 
-// $XDG_RUNTIME_DIR/selsearch.sock (or /tmp/selsearch-$UID.sock).
+// $XDG_RUNTIME_DIR/selsearch.sock (or /tmp/selsearch-$UID.sock); on Windows
+// the named pipe \\.\pipe\selsearch-<username>.
 // Protocol: one JSON object per line, each answered by one JSON line.
 //   -> {"cmd":"lens","mode":"region"}
 //   <- {"ok":true}

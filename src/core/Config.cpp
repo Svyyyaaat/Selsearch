@@ -28,6 +28,7 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("general.accent"), QString()},                // "#rrggbb", empty = built-in palette
         {QStringLiteral("general.follow_portal_accent"), false},
         {QStringLiteral("general.color_scheme"), QStringLiteral("auto")},  // auto | light | dark
+        {QStringLiteral("general.autostart"), false},  // Windows: start with Windows (Linux: selsearch.service)
 
         // Lens overlay
         {QStringLiteral("lens.on_select"), QStringLiteral("toolbar")},  // toolbar | search_image | search_text | ask
@@ -64,6 +65,20 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("ai.api_key"), QString()},
         {QStringLiteral("ai.api_key_env"), QString()},  // read the key from this env var instead
         {QStringLiteral("ai.history"), true},
+
+        // Shortcuts (Qt key-sequence syntax). Applied in-app on Windows and
+        // through the GlobalShortcuts portal (KDE/GNOME); on Hyprland/sway
+        // they feed the generated compositor config.
+        {QStringLiteral("shortcuts.launcher"), QStringLiteral("Alt+Space")},
+#ifdef Q_OS_WIN
+        // Win+S (Search) and Win+Shift+S (Snipping Tool) belong to Windows,
+        // which refuses to let an app register them.
+        {QStringLiteral("shortcuts.lens"), QStringLiteral("Alt+Shift+S")},
+        {QStringLiteral("shortcuts.lens_text"), QStringLiteral("Alt+Shift+T")},
+#else
+        {QStringLiteral("shortcuts.lens"), QStringLiteral("Meta+S")},
+        {QStringLiteral("shortcuts.lens_text"), QStringLiteral("Meta+Shift+S")},
+#endif
 
         // Launcher
         {QStringLiteral("launcher.apps"), true},

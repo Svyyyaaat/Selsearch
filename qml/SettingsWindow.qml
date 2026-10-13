@@ -37,6 +37,8 @@ ApplicationWindow {
     readonly property color fgDim: "#9a9eab"
     readonly property color line: Qt.rgba(1, 1, 1, 0.07)
     readonly property color accent: "#8e9bff"
+    // Windows: hotkeys are registered in-app, so no compositor snippet.
+    readonly property bool isWindows: Qt.platform.os === "windows"
     property int page: 0
     // Bumped on every config change so bindings re-read values.
     property int rev: 0
@@ -152,8 +154,12 @@ ApplicationWindow {
             WelcomeStep {
                 number: 1
                 title: qsTr("Bind the shortcuts")
-                body: qsTr("Add these lines to ~/.config/hypr/hyprland.lua (other compositors: see Shortcuts).")
+                body: win.isWindows
+                      ? qsTr("Selsearch listens for these keys itself: %1 opens the launcher, %2 searches the screen, %3 selects text. Change them under Shortcuts or in the config file.")
+                            .arg(win.val("shortcuts.launcher")).arg(win.val("shortcuts.lens")).arg(win.val("shortcuts.lens_text"))
+                      : qsTr("Add these lines to ~/.config/hypr/hyprland.lua (other compositors: see Shortcuts).")
                 Column {
+                    visible: !win.isWindows
                     width: parent.width
                     spacing: 8
                     Rectangle {
@@ -172,7 +178,7 @@ ApplicationWindow {
                             font.family: "monospace"
                             font.pixelSize: 12
                             color: "#c9ccd6"
-                            text: win.settings.hyprlandSnippet()
+                            text: { win.rev; return win.settings.hyprlandSnippet() }
                         }
                     }
                     Button { text: qsTr("Copy"); onClicked: win.settings.copy(welcomeSnippet.text) }
@@ -278,7 +284,10 @@ ApplicationWindow {
                 }
             }
             SwitchRow { title: qsTr("Follow the desktop accent colour"); key: "general.follow_portal_accent"
-                subtitle: qsTr("Reads the accent from xdg-desktop-portal when your desktop provides one (GNOME, KDE). Falls back to the colour above.") }
+                subtitle: win.isWindows ? qsTr("Uses the accent colour from Windows settings.")
+                                        : qsTr("Reads the accent from xdg-desktop-portal when your desktop provides one (GNOME, KDE). Falls back to the colour above.") }
+            SwitchRow { title: qsTr("Start with Windows"); key: "general.autostart"; visible: win.isWindows
+                subtitle: qsTr("Runs Selsearch in the background after you sign in, so the shortcuts work right away.") }
         }
     }
 
@@ -421,40 +430,102 @@ ApplicationWindow {
     Component {
         id: shortcutsPage
         Column {
-            spacing: 12
+            spacing: 0
+            readonly property string mode: win.settings.shortcutMode
             Text {
                 width: parent.width
+                bottomPadding: 12
                 wrapMode: Text.Wrap
                 color: win.fgDim
                 font.pixelSize: 13
-                text: qsTr("Shortcuts are bound in your compositor, which then runs the tiny `selsearch` command. Add this to ~/.config/hypr/hyprland.lua:")
+                text: parent.mode === "inapp" ? qsTr("Click a shortcut and press the new keys. It works immediately.")
+                    : parent.mode === "portal" ? qsTr("Click a shortcut and press the new keys. Your desktop asks once to confirm them, and you can also change them in its keyboard settings.")
+                    : qsTr("Click a shortcut and press the new keys. On this desktop the compositor owns global keys, so paste the snippet below into its config (it updates as you change keys).")
             }
-            Rectangle {
+            ShortcutRow { title: qsTr("Open the launcher"); key: "shortcuts.launcher" }
+            ShortcutRow { title: qsTr("Search the screen"); key: "shortcuts.lens" }
+            ShortcutRow { title: qsTr("Select text on screen"); key: "shortcuts.lens_text" }
+
+            Item { width: 1; height: 18 }
+            Column {
+                visible: parent.mode !== "inapp" && parent.mode !== "portal"
                 width: parent.width
-                height: snippet.implicitHeight + 24
-                radius: 12
-                color: "#0b0c0f"
-                border.color: win.line
-                TextEdit {
-                    id: snippet
-                    x: 14; y: 12
-                    width: parent.width - 28
-                    readOnly: true
-                    selectByMouse: true
-                    wrapMode: Text.WrapAnywhere
-                    font.family: "monospace"
+                spacing: 10
+                Text {
+                    color: win.fg
+                    font.pixelSize: 14
+                    text: parent.parent.mode === "sway" ? qsTr("sway config") : qsTr("Hyprland config (~/.config/hypr/hyprland.lua)")
+                }
+                Rectangle {
+                    width: parent.width
+                    height: snippet.implicitHeight + 24
+                    radius: 12
+                    color: "#0b0c0f"
+                    border.color: win.line
+                    TextEdit {
+                        id: snippet
+                        x: 14; y: 12
+                        width: parent.width - 28
+                        readOnly: true
+                        selectByMouse: true
+                        wrapMode: Text.WrapAnywhere
+                        font.family: "monospace"
+                        font.pixelSize: 12
+                        color: "#c9ccd6"
+                        text: { win.rev; return parent.parent.parent.mode === "sway" ? win.settings.swaySnippet() : win.settings.hyprlandSnippet() }
+                    }
+                }
+                Button { text: qsTr("Copy"); onClicked: win.settings.copy(snippet.text) }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    color: win.fgDim
                     font.pixelSize: 12
-                    color: "#c9ccd6"
-                    text: win.settings.hyprlandSnippet()
+                    text: qsTr("Other compositors (niri, river, …): bind the same keys to `selsearch launcher`, `selsearch lens` and `selsearch lens --text`.")
                 }
             }
-            Button { text: qsTr("Copy"); onClicked: win.settings.copy(snippet.text) }
+        }
+    }
+
+    // A shortcut with a key recorder: click, press keys; Esc cancels,
+    // Backspace restores the default.
+    component ShortcutRow: SettingRow {
+        id: scr
+        property string key
+        property bool recording: false
+        subtitle: recording ? qsTr("Press the new keys… (Esc to cancel, Backspace for default)") : ""
+        Rectangle {
+            id: keyBox
+            width: 220
+            height: 36
+            radius: 10
+            color: scr.recording ? Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.16) : Qt.rgba(1, 1, 1, 0.05)
+            border.color: scr.recording ? win.accent : win.line
+            Behavior on color { ColorAnimation { duration: 120 } }
             Text {
-                width: parent.width
-                wrapMode: Text.Wrap
-                color: win.fgDim
+                anchors.centerIn: parent
+                text: scr.recording ? qsTr("Recording…") : (win.settings.displayKeys(win.val(scr.key)) || qsTr("Not set"))
+                color: win.fg
                 font.pixelSize: 13
-                text: qsTr("sway / river / niri: bind the same commands (e.g. bindsym Mod1+space exec selsearch launcher). KDE and GNOME: add custom shortcuts that run them.")
+                font.family: scr.recording ? "" : "monospace"
+            }
+            TapHandler { onTapped: { scr.recording = true; recorder.forceActiveFocus() } }
+            Item {
+                id: recorder
+                focus: scr.recording
+                onActiveFocusChanged: if (!activeFocus) scr.recording = false
+                Keys.onPressed: (event) => {
+                    if (!scr.recording) return
+                    event.accepted = true
+                    const mods = [Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta, Qt.Key_Super_L, Qt.Key_Super_R, Qt.Key_AltGr]
+                    if (mods.indexOf(event.key) >= 0) return   // wait for the actual key
+                    if (event.key === Qt.Key_Escape && event.modifiers === Qt.NoModifier) { scr.recording = false; return }
+                    if (event.key === Qt.Key_Backspace && event.modifiers === Qt.NoModifier) {
+                        win.cfg.reset(scr.key); scr.recording = false; return
+                    }
+                    win.set(scr.key, win.settings.sequenceFor(event.key, event.modifiers))
+                    scr.recording = false
+                }
             }
         }
     }

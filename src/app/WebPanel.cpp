@@ -7,10 +7,20 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 namespace selsearch {
 
 static QString helperPath()
 {
+#ifdef Q_OS_WIN
+    // selsearch-web.exe next to us (findExecutable adds the .exe).
+    const QString bundled = QStandardPaths::findExecutable(QStringLiteral("selsearch-web"), {QCoreApplication::applicationDirPath()});
+    if (!bundled.isEmpty())
+        return bundled;
+#endif
     const QString local = QCoreApplication::applicationDirPath() + QStringLiteral("/selsearch-web");
     if (QFileInfo(local).isExecutable())
         return local;
@@ -63,6 +73,12 @@ void WebPanel::open(const QUrl &url, const QString &title, const QPoint &onScree
         m_proc.start(helperPath(), args);
         m_proc.waitForStarted(2000);
     }
+#ifdef Q_OS_WIN
+    // We hold the foreground (the user just acted on our window); let the
+    // panel process take it so its window gets focus.
+    if (m_proc.state() == QProcess::Running)
+        AllowSetForegroundWindow(DWORD(m_proc.processId()));
+#endif
     const QJsonObject o{{QStringLiteral("cmd"), QStringLiteral("open")},
                         {QStringLiteral("url"), url.toString()},
                         {QStringLiteral("title"), title},

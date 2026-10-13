@@ -17,7 +17,8 @@ class QFileSystemWatcher;
 
 namespace selsearch {
 
-// Installed applications from freedesktop .desktop files.
+// Installed applications from freedesktop .desktop files (on Windows: Start
+// Menu shortcuts, see WindowsApps.h).
 // Rows: one per visible app (kind App) plus its desktop actions as secondary
 // rows (kind Action, "Firefox — New Private Window") that rank lower.
 // Ranking: fuzzy match over name, generic name, keywords and exec basename,

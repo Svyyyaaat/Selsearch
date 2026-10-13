@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 //
 // selsearch: the tiny client you bind to keys in your compositor. It sends one
-// command to selsearchd over a Unix socket and starts the daemon on demand.
-// Deliberately free of Qt so a keypress costs ~1 ms of process startup.
+// command to selsearchd over a Unix socket (Windows: a named pipe) and starts
+// the daemon on demand. Deliberately free of Qt so a keypress costs ~1 ms of
+// process startup. (On Windows the daemon registers its hotkeys itself; the
+// CLI is for scripts and terminals.)
 
 #include <cerrno>
 #include <chrono>
@@ -13,6 +15,12 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include <iterator>
+
+#include <windows.h>
+#include <shellapi.h>
+#else
 #include <fcntl.h>
 #include <limits.h>
 #include <poll.h>
@@ -22,6 +30,7 @@
 #include <unistd.h>
 
 extern char **environ;
+#endif
 
 namespace {
 
@@ -41,16 +50,17 @@ Usage:
 Hyprland 0.55+ (~/.config/hypr/hyprland.lua):
   hl.bind("ALT + Space", hl.dsp.exec_cmd("selsearch launcher"))
   hl.bind("SUPER + S", hl.dsp.exec_cmd("selsearch lens"))
-  hl.layer_rule({ match = { namespace = "selsearch-lens" }, name = "selsearch-lens", no_anim = true })
 Run `selsearch config` for the full snippet (autostart, other compositors).
 )";
 
+#ifndef _WIN32
 std::string socketPath()
 {
     if (const char *rt = std::getenv("XDG_RUNTIME_DIR"); rt && *rt)
         return std::string(rt) + "/selsearch.sock";
     return "/tmp/selsearch-" + std::to_string(getuid()) + ".sock";
 }
+#endif
 
 std::string jsonEscape(const std::string &s)
 {
@@ -75,6 +85,146 @@ std::string jsonEscape(const std::string &s)
     }
     return out;
 }
+
+#ifdef _WIN32
+
+std::wstring widen(const std::string &s)
+{
+    if (s.empty())
+        return {};
+    const int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), nullptr, 0);
+    std::wstring out(size_t(n), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), out.data(), n);
+    return out;
+}
+
+std::string narrow(const std::wstring &s)
+{
+    if (s.empty())
+        return {};
+    const int n = WideCharToMultiByte(CP_UTF8, 0, s.data(), int(s.size()), nullptr, 0, nullptr, nullptr);
+    std::string out(size_t(n), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, s.data(), int(s.size()), out.data(), n, nullptr, nullptr);
+    return out;
+}
+
+// The daemon's QLocalServer("selsearch-<user>") listens on this pipe (see
+// ipcSocketPath() in src/core/Ipc.cpp).
+std::wstring pipePath()
+{
+    std::wstring user;
+    if (const wchar_t *u = _wgetenv(L"USERNAME"); u && *u)
+        user = u;
+    std::erase(user, L'\\');
+    return L"\\\\.\\pipe\\selsearch-" + (user.empty() ? std::wstring(L"user") : user);
+}
+
+HANDLE connectPipe()
+{
+    const std::wstring path = pipePath();
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        HANDLE h = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+        if (h != INVALID_HANDLE_VALUE)
+            return h;
+        // All instances busy: wait for the server to offer a new one.
+        if (GetLastError() != ERROR_PIPE_BUSY || !WaitNamedPipeW(path.c_str(), 1000))
+            break;
+    }
+    return INVALID_HANDLE_VALUE;
+}
+
+std::wstring daemonPath()
+{
+    // Prefer the selsearchd.exe next to this binary.
+    wchar_t self[MAX_PATH * 2];
+    const DWORD n = GetModuleFileNameW(nullptr, self, DWORD(std::size(self)));
+    if (n > 0 && n < std::size(self)) {
+        std::wstring dir(self, n);
+        dir = dir.substr(0, dir.find_last_of(L"\\/"));
+        const std::wstring candidate = dir + L"\\selsearchd.exe";
+        if (GetFileAttributesW(candidate.c_str()) != INVALID_FILE_ATTRIBUTES)
+            return candidate;
+    }
+    return L"selsearchd.exe";
+}
+
+bool startDaemon()
+{
+    const std::wstring path = daemonPath();
+    std::wstring cmdLine = L"\"" + path + L"\"";
+    STARTUPINFOW si = {};
+    si.cb = sizeof si;
+    PROCESS_INFORMATION pi = {};
+    // Detached: no console, not tied to this terminal or its Ctrl+C.
+    const bool qualified = path.find(L'\\') != std::wstring::npos;
+    if (!CreateProcessW(qualified ? path.c_str() : nullptr, cmdLine.data(), nullptr, nullptr, FALSE,
+                        DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, nullptr, &si, &pi))
+        return false;
+    AllowSetForegroundWindow(pi.dwProcessId);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return true;
+}
+
+int sendCommand(const std::string &json, bool autostart, int timeoutMs)
+{
+    // We were started by the user (a terminal, a shortcut): let the daemon
+    // bring its window to the front, which Windows otherwise refuses.
+    AllowSetForegroundWindow(ASFW_ANY);
+    HANDLE pipe = connectPipe();
+    if (pipe == INVALID_HANDLE_VALUE && autostart) {
+        if (!startDaemon()) {
+            std::fprintf(stderr, "selsearch: could not start selsearchd\n");
+            return 2;
+        }
+        // The daemon needs a moment to load Qt and create the pipe.
+        for (int i = 0; i < 100 && pipe == INVALID_HANDLE_VALUE; ++i) {
+            Sleep(50);
+            pipe = connectPipe();
+        }
+    }
+    if (pipe == INVALID_HANDLE_VALUE) {
+        std::fprintf(stderr, "selsearch: selsearchd is not running\n");
+        return 2;
+    }
+    const std::string line = json + "\n";
+    DWORD written = 0;
+    if (!WriteFile(pipe, line.data(), DWORD(line.size()), &written, nullptr) || written != line.size()) {
+        CloseHandle(pipe);
+        return 2;
+    }
+    std::string reply;
+    char buf[4096];
+    const ULONGLONG deadline = GetTickCount64() + ULONGLONG(timeoutMs);
+    while (reply.find('\n') == std::string::npos) {
+        // Poll so the timeout holds without overlapped I/O.
+        DWORD available = 0;
+        if (!PeekNamedPipe(pipe, nullptr, 0, nullptr, &available, nullptr))
+            break;  // closed
+        if (available == 0) {
+            if (GetTickCount64() > deadline)
+                break;
+            Sleep(5);
+            continue;
+        }
+        DWORD n = 0;
+        if (!ReadFile(pipe, buf, available < sizeof buf ? available : DWORD(sizeof buf), &n, nullptr) || n == 0)
+            break;
+        reply.append(buf, size_t(n));
+    }
+    CloseHandle(pipe);
+    if (reply.empty()) {
+        std::fprintf(stderr, "selsearch: no reply from selsearchd\n");
+        return 2;
+    }
+    const bool ok = reply.find("\"ok\":true") != std::string::npos;
+    // Print replies that carry data (status, ocr) or errors.
+    if (!ok || reply.size() > 12)
+        std::fputs(reply.c_str(), ok ? stdout : stderr);
+    return ok ? 0 : 1;
+}
+
+#else  // POSIX
 
 int connectSocket()
 {
@@ -176,11 +326,27 @@ int sendCommand(const std::string &json, bool autostart, int timeoutMs)
     return ok ? 0 : 1;
 }
 
+#endif
+
 }  // namespace
 
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
+    // argv is in the ANSI code page; take the real (UTF-16) command line.
+    std::vector<std::string> args;
+    int wargc = 0;
+    if (wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &wargc)) {
+        for (int i = 1; i < wargc; ++i)
+            args.push_back(narrow(wargv[i]));
+        LocalFree(wargv);
+    }
+    SetConsoleOutputCP(CP_UTF8);  // replies are UTF-8 JSON
+    (void)argc;
+    (void)argv;
+#else
     std::vector<std::string> args(argv + 1, argv + argc);
+#endif
     if (args.empty() || args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
         std::fputs(kUsage, stdout);
         return args.empty() ? 1 : 0;
@@ -217,11 +383,23 @@ int main(int argc, char **argv)
             std::fputs("usage: selsearch ocr FILE [LANG...]\n", stderr);
             return 1;
         }
+#ifdef _WIN32
+        // The daemon has another working directory: send an absolute path.
+        wchar_t full[MAX_PATH * 4];
+        const std::wstring given = widen(args[1]);
+        const DWORD len = GetFullPathNameW(given.c_str(), DWORD(std::size(full)), full, nullptr);
+        if (len == 0 || len >= std::size(full) || GetFileAttributesW(full) == INVALID_FILE_ATTRIBUTES) {
+            std::fprintf(stderr, "selsearch: %s: No such file or directory\n", args[1].c_str());
+            return 1;
+        }
+        const std::string real = narrow(std::wstring(full, len));
+#else
         char real[PATH_MAX];
         if (!realpath(args[1].c_str(), real)) {
             std::fprintf(stderr, "selsearch: %s: %s\n", args[1].c_str(), std::strerror(errno));
             return 1;
         }
+#endif
         std::string langs;
         for (size_t i = 2; i < args.size(); ++i)
             langs += std::string(i > 2 ? "," : "") + "\"" + jsonEscape(args[i]) + "\"";

@@ -11,6 +11,7 @@
 #include <QPainter>
 #include <QRandomGenerator>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
@@ -160,6 +161,19 @@ private Q_SLOTS:
     {
         QVERIFY(m_xdg.isValid());
         qputenv("XDG_DATA_HOME", m_xdg.path().toLocal8Bit());
+#ifdef Q_OS_WIN
+        // No XDG on Windows: keep the user's real history out of reach.
+        QStandardPaths::setTestModeEnabled(true);
+#endif
+    }
+
+    static QString dataHome()
+    {
+#ifdef Q_OS_WIN
+        return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+#else
+        return qEnvironmentVariable("XDG_DATA_HOME");
+#endif
     }
 
     // --- SSE parsing --------------------------------------------------------
@@ -560,7 +574,7 @@ private Q_SLOTS:
     void historyRoundTrip()
     {
         AiHistory history;
-        QCOMPARE(history.directory(), m_xdg.path() + QStringLiteral("/selsearch/history"));
+        QCOMPARE(history.directory(), dataHome() + QStringLiteral("/selsearch/history"));
         QVERIFY(history.isEnabled());
         history.deleteAll();
 
@@ -578,9 +592,11 @@ private Q_SLOTS:
         QVERIFY(QFileInfo::exists(file));
         const auto perms = QFileInfo(file).permissions();
         QVERIFY(perms.testFlags(QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+#ifndef Q_OS_WIN  // NTFS has ACLs, not mode bits; %LOCALAPPDATA% is private
         QCOMPARE(int(perms & (QFileDevice::ExeOwner | QFileDevice::ReadGroup | QFileDevice::WriteGroup | QFileDevice::ExeGroup
                               | QFileDevice::ReadOther | QFileDevice::WriteOther | QFileDevice::ExeOther)),
                  0);
+#endif
 
         const auto loaded = history.load(a.id);
         QVERIFY(loaded.has_value());

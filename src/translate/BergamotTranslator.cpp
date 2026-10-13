@@ -58,9 +58,22 @@ BergamotTranslator::BergamotTranslator(QObject *parent, const QString &program)
 
 QString BergamotTranslator::executable() const
 {
+#ifdef Q_OS_WIN
+    // A path ("C:\...\translateLocally.exe"), else PATH (findExecutable
+    // tries PATHEXT, so .exe is implied), else the installer's default folder.
+    if (m_program.contains(QLatin1Char('/')) || m_program.contains(QLatin1Char('\\')))
+        return QFileInfo::exists(m_program) ? m_program : QString();
+    QString found = QStandardPaths::findExecutable(m_program);
+    if (found.isEmpty()) {
+        const QString programFiles = qEnvironmentVariable("ProgramFiles", QStringLiteral("C:/Program Files"));
+        found = QStandardPaths::findExecutable(m_program, {programFiles + QStringLiteral("/translateLocally")});
+    }
+    return found;
+#else
     if (m_program.contains(QLatin1Char('/')))
         return QFileInfo::exists(m_program) ? m_program : QString();
     return QStandardPaths::findExecutable(m_program);
+#endif
 }
 
 bool BergamotTranslator::isAvailable() const

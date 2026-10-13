@@ -3,6 +3,9 @@
 
 #include "FuzzyMatcher.h"
 #include "Launch.h"
+#ifdef Q_OS_WIN
+#include "WindowsApps.h"
+#endif
 
 #include <QDir>
 #include <QDirIterator>
@@ -42,6 +45,9 @@ static void appendUnique(QStringList &list, const QString &dir)
 
 QStringList AppsProvider::defaultApplicationDirs()
 {
+#ifdef Q_OS_WIN
+    return winshell::startMenuDirs();
+#endif
     QString dataHome = qEnvironmentVariable("XDG_DATA_HOME");
     if (dataHome.isEmpty() || !QDir::isAbsolutePath(dataHome))
         dataHome = QDir::homePath() + QStringLiteral("/.local/share");
@@ -122,7 +128,13 @@ void AppsProvider::refresh()
         state->watchDirs << root;
         // Sorted for deterministic results when a dir contains duplicate ids.
         QStringList files;
-        QDirIterator it(root, {QStringLiteral("*.desktop")}, QDir::Files | QDir::Readable,
+#ifdef Q_OS_WIN
+        // Start Menu shortcuts (.url: e.g. games launched through a store).
+        const QStringList patterns{QStringLiteral("*.desktop"), QStringLiteral("*.lnk"), QStringLiteral("*.url")};
+#else
+        const QStringList patterns{QStringLiteral("*.desktop")};
+#endif
+        QDirIterator it(root, patterns, QDir::Files | QDir::Readable,
                         QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
         while (it.hasNext())
             files << it.next();
@@ -132,10 +144,19 @@ void AppsProvider::refresh()
             state->watchDirs << dirs.next();
 
         for (const QString &path : std::as_const(files)) {
+#ifdef Q_OS_WIN
+            const bool shortcut = !path.endsWith(QLatin1String(".desktop"));
+            const QString id = shortcut ? QDir(root).relativeFilePath(path) : desktopentry::desktopFileId(root, path);
+#else
             const QString id = desktopentry::desktopFileId(root, path);
+#endif
             if (seen.contains(id))
                 continue;  // a higher-priority dir already defines (or hides) this id
+#ifdef Q_OS_WIN
+            auto e = shortcut ? winshell::shortcutEntry(root, path) : desktopentry::parseFile(path, id, m_options.locale);
+#else
             auto e = desktopentry::parseFile(path, id, m_options.locale);
+#endif
             if (!e)
                 continue;
             seen.insert(id);
@@ -361,8 +382,19 @@ QStringList AppsProvider::launchArgv(const DesktopEntry &entry, const QString &a
 
 bool AppsProvider::launch(const DesktopEntry &entry, const QString &actionId)
 {
-    const QStringList argv = launchArgv(entry, actionId);
     QString error;
+#ifdef Q_OS_WIN
+    // Start Menu shortcuts: let the shell resolve and start them.
+    if (entry.exec.isEmpty() && actionId.isEmpty() && !entry.filePath.endsWith(QLatin1String(".desktop"))) {
+        const bool ok = winshell::open(entry.filePath, &error);
+        if (ok)
+            m_usage->record(entry.id);
+        QMutexLocker lock(&m_mutex);
+        m_error = ok ? QString() : error;
+        return ok;
+    }
+#endif
+    const QStringList argv = launchArgv(entry, actionId);
     if (argv.isEmpty()) {
         error = QStringLiteral("%1: invalid Exec line").arg(entry.id);
     } else if (launchDetached(argv, entry.workingDir, entry.id, &error)) {
