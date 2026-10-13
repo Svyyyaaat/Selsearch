@@ -2,10 +2,7 @@
 #include "Settings.h"
 
 #include "core/Config.h"
-#if __has_include("ocr/ModelStore.h")
 #include "ocr/ModelStore.h"
-#define SELSEARCH_HAVE_MODELSTORE 1
-#endif
 #include "ocr/OcrService.h"
 #include "search/ImageSearch.h"
 #include "search/SearchEngines.h"
@@ -89,11 +86,7 @@ QString Settings::ocrStatus() const
     if (m_ocrDownloading)
         return m_ocrProgress.isEmpty() ? tr("Downloading models…") : m_ocrProgress;
     const QStringList engines = m_ocr.availableEngines();
-#ifdef SELSEARCH_HAVE_MODELSTORE
-    const QStringList missing = ModelStore::missingFor(effectiveOcrLanguages(m_config));
-#else
-    const QStringList missing;
-#endif
+    const QStringList missing = ModelStore().missingFor(effectiveOcrLanguages(m_config));
     if (engines.contains(QLatin1String("paddle")) && missing.isEmpty())
         return tr("PP-OCRv5 ready for %1").arg(effectiveOcrLanguages(m_config).join(QStringLiteral(", ")));
     if (!missing.isEmpty())
@@ -165,7 +158,6 @@ void Settings::testAi()
 
 void Settings::downloadOcrModels()
 {
-#ifdef SELSEARCH_HAVE_MODELSTORE
     if (m_ocrDownloading)
         return;
     auto *store = new ModelStore(this);
@@ -189,7 +181,6 @@ void Settings::downloadOcrModels()
         store->deleteLater();
     });
     store->ensure(effectiveOcrLanguages(m_config));
-#endif
 }
 
 void Settings::openConfigFile()

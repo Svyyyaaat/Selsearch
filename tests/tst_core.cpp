@@ -104,6 +104,12 @@ private Q_SLOTS:
         QCOMPARE(lines[0].text(), QStringLiteral("left"));
         QCOMPARE(lines[1].text(), QStringLiteral("right"));
         QCOMPARE(lines[2].text(), QStringLiteral("second"));
+
+        // Pieces of one row close together are merged into a single line.
+        QList<OcrLine> split{line(0, 10, "$"), line(50, 11, "selsearch"), line(100, 10, "lens")};
+        sortReadingOrder(split);
+        QCOMPARE(split.size(), 1);
+        QCOMPARE(split[0].text(), QStringLiteral("$ selsearch lens"));
     }
 };
 

@@ -56,8 +56,22 @@ void sortReadingOrder(QList<OcrLine> &lines)
         std::stable_sort(lines.begin() + i, lines.begin() + j, [](const OcrLine &a, const OcrLine &b) {
             return a.box.left() < b.box.left();
         });
-        for (int k = i; k < j; ++k)
+        // Detectors often split one visual line at wide gaps ("Total ..... $7.50",
+        // "$ cmd --flag"). Re-join pieces on the same row that are close
+        // together; far-apart pieces (columns) stay separate lines.
+        for (int k = i; k < j; ++k) {
+            if (!out.isEmpty() && k > i) {
+                OcrLine &prev = out.last();
+                const qreal h = std::min(prev.box.height(), lines[k].box.height());
+                const qreal gap = lines[k].box.left() - prev.box.right();
+                if (gap < h * 2.5) {
+                    prev.words += lines[k].words;
+                    prev.box = prev.box.united(lines[k].box);
+                    continue;
+                }
+            }
             out << lines[k];
+        }
         i = j;
     }
     lines = std::move(out);

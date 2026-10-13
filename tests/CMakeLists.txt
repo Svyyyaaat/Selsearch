@@ -22,3 +22,5 @@ add_executable(selsearch-vptr tools/vptr.c
     ${CMAKE_CURRENT_BINARY_DIR}/wlr-virtual-pointer-unstable-v1-client.h ${CMAKE_CURRENT_BINARY_DIR}/wlr-virtual-pointer-unstable-v1-protocol.c)
 target_include_directories(selsearch-vptr PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(selsearch-vptr PRIVATE PkgConfig::WAYLAND_CLIENT m)
+add_executable(selsearch-ocr-dump tools/ocr_dump.cpp)
+target_link_libraries(selsearch-ocr-dump PRIVATE selsearch_core Qt6::Gui)

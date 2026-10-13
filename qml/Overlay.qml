@@ -282,7 +282,7 @@ Window {
             property real rimWidth: win.themeName === "aurora" ? 2.0 : 1.5
             property real wave: win.wave
             property real time: win.time
-            property real dots: win.themeName === "mono" ? 0 : 1
+            property real dots: win.themeName === "mono" ? 0 : (win.isTextSel ? 0.25 : 1)
             property real spacing: 9
             property real tintMix: win.themeName === "aurora" ? 0.14 : 0
             property color rimColor: win.rimA
