@@ -48,7 +48,7 @@ file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     src/core/*.cpp src/core/*.h
     src/capture/*.cpp src/capture/*.h
     src/compositor/*.cpp src/compositor/*.h
-    src/ocr/OcrCommon.cpp src/ocr/OcrService.cpp src/ocr/*.h
+    src/ocr/OcrCommon.cpp src/ocr/OcrService.cpp src/ocr/ModelStore.cpp src/ocr/*.h
     src/launcher/*.cpp src/launcher/*.h
     src/translate/*.cpp src/translate/*.h
     src/ai/*.cpp src/ai/*.h
