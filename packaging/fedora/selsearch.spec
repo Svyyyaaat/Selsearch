@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Built by .github/workflows/build.yml from `git archive` of the tagged commit:
 #   rpmbuild -ba --define "_sourcedir $PWD" --define "version_override 0.1.0" selsearch.spec
-%{!?version_override: %global version_override 0.1.1}
+%{!?version_override: %global version_override 0.1.2}
 
 Name:           selsearch
 Version:        %{version_override}
@@ -71,6 +71,10 @@ install -Dm644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 %{_datadir}/applications/selsearch.desktop
 
 %changelog
+* Thu Oct 15 2026 Svyyyaaat - 0.1.2-1
+- Lens: language menu closes on a second click; selecting on another
+  monitor on Hyprland; options to read text on one screen or only inside
+  the selection; dot brightness setting
 * Tue Oct 13 2026 Svyyyaaat - 0.1.1-1
 - Windows: lens no longer shows black screens; Alt/Win shortcuts no longer
   open menus; the shortcut recorder takes any key combination

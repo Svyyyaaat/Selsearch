@@ -35,6 +35,7 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("lens.recognize_text"), true},
         {QStringLiteral("lens.snap_to_windows"), true},
         {QStringLiteral("lens.show_hints"), true},
+        {QStringLiteral("lens.dot_brightness"), 1.0},  // dot field intensity, 0.5..3
 
         // Search
         {QStringLiteral("search.engine"), QStringLiteral("duckduckgo")},
@@ -49,6 +50,8 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("ocr.engine"), QStringLiteral("auto")},  // auto | paddle | tesseract
         {QStringLiteral("ocr.languages"), QStringList()},        // empty = system languages + en
         {QStringLiteral("ocr.unload_after_s"), 60},              // 0 = keep loaded
+        {QStringLiteral("ocr.all_screens"), true},       // false: only the screen the lens opened on (others when selected on)
+        {QStringLiteral("ocr.selection_only"), false},   // read only the selected region, after selecting
 
         // Translation
         {QStringLiteral("translate.backend"), QStringLiteral("auto")},  // auto | web | bergamot | libretranslate | llm

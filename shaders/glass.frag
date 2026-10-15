@@ -26,6 +26,7 @@ layout(std140, binding = 0) uniform buf {
     vec4 rimColor;
     vec4 rimColor2;  // aurora second colour (== rimColor otherwise)
     vec4 dotColor;
+    float boost;     // user dot brightness (lens.dot_brightness), 1 = default
 };
 layout(binding = 1) uniform sampler2D source;
 
@@ -103,7 +104,7 @@ void main()
                 intensity += ring * (1.0 - wave) * 1.2;
             }
         }
-        intensity = clamp(intensity * dots, 0.0, 1.0);
+        intensity = clamp(intensity * dots * boost, 0.0, 1.0);
 
         // Dot grows a little with intensity; anti-aliased disc.
         float rr = length(px - cc);
@@ -112,7 +113,9 @@ void main()
         // Soft glow around bright dots.
         float glow = exp(-rr * rr / (spacing * spacing * 0.35)) * intensity * 0.35;
         float a = (disc * intensity + glow) * (1.0 - inside);
-        col = mix(col, dotColor.rgb, clamp(a, 0.0, 1.0));
+        // Brighter than default also lifts dark accents towards white.
+        vec3 dc = mix(dotColor.rgb, vec3(1.0), clamp((boost - 1.0) * 0.2, 0.0, 0.4));
+        col = mix(col, dc, clamp(a, 0.0, 1.0));
     }
 
     col = mix(col, crisp, inside);

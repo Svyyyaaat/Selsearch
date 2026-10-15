@@ -132,6 +132,8 @@ QColor LensController::accent() const
 
 bool LensController::recognizeText() const { return m_config.boolean(QStringLiteral("lens.recognize_text")); }
 bool LensController::snapToWindows() const { return m_config.boolean(QStringLiteral("lens.snap_to_windows")); }
+bool LensController::ocrSelectionOnly() const { return m_config.boolean(QStringLiteral("ocr.selection_only")); }
+qreal LensController::dotBrightness() const { return std::clamp(m_config.number(QStringLiteral("lens.dot_brightness")), 0.25, 4.0); }
 bool LensController::showHints() const { return m_config.boolean(QStringLiteral("lens.show_hints")); }
 bool LensController::aiEnabled() const { return m_config.boolean(QStringLiteral("ai.enabled")); }
 QString LensController::onSelect() const { return m_config.string(QStringLiteral("lens.on_select")); }
@@ -157,6 +159,10 @@ void LensController::setActiveScreen(const QString &name)
         return;
     m_activeScreen = name;
     Q_EMIT activeScreenChanged();
+    // Screens skipped at start ("ocr.all_screens" off) are read once used.
+    if (m_active && recognizeText() && !ocrSelectionOnly())
+        if (LensScreen *s = find(name); s && !s->m_ocrStarted)
+            runOcr(s);
 }
 
 LensScreen *LensController::find(const QString &name) const
@@ -261,6 +267,8 @@ void LensController::start(const QString &mode)
             s->m_generation = m_generation;
             s->m_frameSize = frame.size();
             s->m_words.clear();
+            s->m_ocrStarted = false;
+            s->m_ocrRegion = {};
             s->m_translations.clear();
             s->m_translating = false;
 
@@ -302,13 +310,14 @@ void LensController::start(const QString &mode)
         if (m_ocrCancel)
             m_ocrCancel->store(true);
         m_ocrCancel = std::make_shared<std::atomic_bool>(false);
-        if (recognizeText()) {
+        if (recognizeText() && !ocrSelectionOnly()) {
             // Focused screen first; the worker runs them in order.
             if (auto *f = find(focusedScreen))
                 runOcr(f);
-            for (auto *s : std::as_const(m_screens))
-                if (s->name() != focusedScreen)
-                    runOcr(s);
+            if (m_config.boolean(QStringLiteral("ocr.all_screens")))
+                for (auto *s : std::as_const(m_screens))
+                    if (s->name() != focusedScreen)
+                        runOcr(s);
         }
     });
     watcher->setFuture(future);
@@ -316,7 +325,11 @@ void LensController::start(const QString &mode)
 
 void LensController::showWindows()
 {
-    for (auto *s : std::as_const(m_screens)) {
+    // The focused screen last: compositors give the keyboard to the newest
+    // exclusive surface.
+    QList<LensScreen *> order = m_screens;
+    std::stable_partition(order.begin(), order.end(), [](LensScreen *s) { return !s->focused(); });
+    for (auto *s : std::as_const(order)) {
         if (!s->window)
             continue;
         prepareLensWindow(s->window, s->screen(), s->focused());
@@ -351,6 +364,8 @@ void LensController::close()
         for (auto *s : std::as_const(m_screens)) {
             s->m_generation = m_generation;  // a fresh URL so the next session reloads
             s->m_words.clear();
+            s->m_ocrStarted = false;
+            s->m_ocrRegion = {};
             s->m_translations.clear();
             Q_EMIT s->frameChanged();
             Q_EMIT s->wordsChanged();
@@ -361,19 +376,43 @@ void LensController::close()
     });
 }
 
-void LensController::runOcr(LensScreen *s)
+void LensController::recognizeRegion(const QString &screen, const QRectF &rect)
 {
-    const QImage frame = m_frames->frame(s->name());
+    LensScreen *s = find(screen);
+    if (!s || !m_active || !recognizeText() || !ocrSelectionOnly() || rect.isEmpty() || rect == s->m_ocrRegion)
+        return;
+    s->m_ocrRegion = rect;
+    runOcr(s, rect);
+}
+
+void LensController::runOcr(LensScreen *s, const QRectF &logicalRegion)
+{
+    QImage frame = m_frames->frame(s->name());
     if (frame.isNull())
         return;
+    // Region OCR: read a crop, then shift the boxes back into the frame.
+    QPoint origin;
+    if (!logicalRegion.isEmpty()) {
+        const qreal f = 1.0 / s->toLogical();
+        const QRect phys = QRectF(logicalRegion.x() * f, logicalRegion.y() * f, logicalRegion.width() * f, logicalRegion.height() * f)
+                               .toAlignedRect()
+                               .intersected(frame.rect());
+        if (phys.isEmpty())
+            return;
+        frame = frame.copy(phys);
+        origin = phys.topLeft();
+    } else {
+        s->m_ocrStarted = true;
+    }
     s->m_ocrBusy = true;
     Q_EMIT s->ocrBusyChanged();
     const int generation = s->m_generation;
+    const int request = ++s->m_ocrRequest;
     auto *watcher = new QFutureWatcher<OcrResult>(this);
-    connect(watcher, &QFutureWatcher<OcrResult>::finished, this, [this, s, watcher, generation] {
+    connect(watcher, &QFutureWatcher<OcrResult>::finished, this, [this, s, watcher, generation, request, origin] {
         watcher->deleteLater();
-        if (!m_screens.contains(s) || s->m_generation != generation)
-            return;  // the session ended or restarted meanwhile
+        if (!m_screens.contains(s) || s->m_generation != generation || s->m_ocrRequest != request)
+            return;  // the session ended or restarted meanwhile, or a newer region was asked for
         const OcrResult r = watcher->result();
         s->m_ocrBusy = false;
         Q_EMIT s->ocrBusyChanged();
@@ -388,7 +427,7 @@ void LensController::runOcr(LensScreen *s)
         int index = 0;
         for (int li = 0; li < r.lines.size(); ++li) {
             for (const auto &w : r.lines[li].words) {
-                words << QVariantMap{{QStringLiteral("x"), w.box.x() * f}, {QStringLiteral("y"), w.box.y() * f},
+                words << QVariantMap{{QStringLiteral("x"), (w.box.x() + origin.x()) * f}, {QStringLiteral("y"), (w.box.y() + origin.y()) * f},
                                      {QStringLiteral("w"), w.box.width() * f}, {QStringLiteral("h"), w.box.height() * f},
                                      {QStringLiteral("text"), w.text}, {QStringLiteral("line"), li},
                                      {QStringLiteral("space"), w.spaceBefore},

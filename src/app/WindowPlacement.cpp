@@ -118,9 +118,15 @@ void setupLensWindow(QQuickWindow *window, QScreen *screen)
 
 void prepareLensWindow(QQuickWindow *window, QScreen *, bool focused)
 {
+    // Hyprland: while one layer surface holds exclusive keyboard focus, the
+    // "on demand" lens surfaces on the other monitors didn't take a
+    // selection. Make them all exclusive; the focused screen's is mapped
+    // last (LensController::showWindows) so it gets the keyboard, and keys
+    // that land elsewhere are forwarded to the screen with the selection.
+    static const bool hyprland = qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE");
     if (auto *layer = LayerShellQt::Window::get(window))
-        layer->setKeyboardInteractivity(focused ? LayerShellQt::Window::KeyboardInteractivityExclusive
-                                                : LayerShellQt::Window::KeyboardInteractivityOnDemand);
+        layer->setKeyboardInteractivity(focused || hyprland ? LayerShellQt::Window::KeyboardInteractivityExclusive
+                                                            : LayerShellQt::Window::KeyboardInteractivityOnDemand);
 }
 
 void setupLauncherWindow(QQuickWindow *window)

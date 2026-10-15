@@ -283,6 +283,9 @@ ApplicationWindow {
                     }
                 }
             }
+            SliderRow { title: qsTr("Dot brightness"); key: "lens.dot_brightness"; from: 0.5; to: 3
+                subtitle: qsTr("How bright the dot field is. Raise it if the dots are hard to see with your accent colour.")
+                visible: win.val("general.theme") !== "mono" }
             SwitchRow { title: qsTr("Follow the desktop accent colour"); key: "general.follow_portal_accent"
                 subtitle: win.isWindows ? qsTr("Uses the accent colour from Windows settings.")
                                         : qsTr("Reads the accent from xdg-desktop-portal when your desktop provides one (GNOME, KDE). Falls back to the colour above.") }
@@ -361,6 +364,10 @@ ApplicationWindow {
                     }
                 }
             }
+            SwitchRow { title: qsTr("Read text on all screens"); key: "ocr.all_screens"
+                subtitle: qsTr("Off: only the screen the lens opens on is read right away; another screen is read when you select on it.") }
+            SwitchRow { title: qsTr("Read text only inside the selection"); key: "ocr.selection_only"
+                subtitle: qsTr("Nothing is read until you select an area, then only that area. Lighter on the CPU; you can't drag over text before selecting.") }
             NumberRow { title: qsTr("Unload models after (seconds)"); key: "ocr.unload_after_s"; from: 0; to: 3600
                 subtitle: qsTr("Frees memory when idle. 0 keeps them loaded for the fastest lens.") }
         }
@@ -713,6 +720,72 @@ ApplicationWindow {
         parent: Overlay.overlay
         anchors.centerIn: parent
         onAccepted: (c) => win.set("general.accent", c.toString())
+    }
+
+    component SliderRow: SettingRow {
+        id: slr
+        property string key
+        property real from: 0
+        property real to: 1
+        Row {
+            spacing: 10
+            // Preview: a few dots at the chosen brightness on a darkened backdrop.
+            Rectangle {
+                width: 64; height: 24; radius: 6
+                anchors.verticalCenter: parent.verticalCenter
+                color: "#121318"
+                border.color: win.line
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 4
+                    Repeater {
+                        model: 6
+                        Rectangle {
+                            required property int index
+                            readonly property real level: Math.min(1, (0.25 + index * 0.1) * slider.value)
+                            width: 3 + 3 * level; height: width; radius: width / 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Qt.tint(win.accent, Qt.rgba(1, 1, 1, Math.max(0, Math.min(0.4, (slider.value - 1) * 0.2))))
+                            opacity: level
+                        }
+                    }
+                }
+            }
+            Slider {
+                id: slider
+                width: 160
+                anchors.verticalCenter: parent.verticalCenter
+                from: slr.from
+                to: slr.to
+                stepSize: 0.1
+                value: Number(win.val(slr.key)) || 1
+                onMoved: win.set(slr.key, Math.round(value * 10) / 10)
+                background: Rectangle {
+                    x: slider.leftPadding
+                    y: slider.topPadding + slider.availableHeight / 2 - height / 2
+                    width: slider.availableWidth
+                    height: 4
+                    radius: 2
+                    color: "#2c2e35"
+                    Rectangle { width: slider.visualPosition * parent.width; height: parent.height; radius: 2; color: win.accent }
+                }
+                handle: Rectangle {
+                    x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
+                    y: slider.topPadding + slider.availableHeight / 2 - height / 2
+                    width: 18; height: 18; radius: 9
+                    color: slider.pressed ? Qt.lighter(win.accent, 1.15) : win.accent
+                    border.color: "#14151a"
+                    border.width: 2
+                }
+            }
+            Text {
+                width: 44
+                anchors.verticalCenter: parent.verticalCenter
+                text: Math.round(slider.value * 100) + "%"
+                color: win.fgDim
+                font.pixelSize: 13
+            }
+        }
     }
 
     component NumberRow: SettingRow {
