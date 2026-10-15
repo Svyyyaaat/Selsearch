@@ -385,8 +385,16 @@ ApplicationWindow {
             ChoiceRow { title: qsTr("Web translator"); key: "translate.web_service"
                 options: [{ id: "google", name: "Google Translate" }, { id: "deepl", name: "DeepL" }]
                 subtitle: qsTr("Opens with the selected text. This sends the text to that site.") }
-            ChoiceRow { title: qsTr("Translate into"); key: "translate.target"; combo: true
-                options: [{ id: "", name: qsTr("System language") }].concat(win.settings.languages.map(l => ({ id: l.code, name: l.name }))) }
+            SettingRow {
+                title: qsTr("Translate into")
+                LanguageButton {
+                    id: targetButton
+                    width: 260
+                    text: { const v = win.val("translate.target"); return v ? win.languageName(v) : qsTr("System language") }
+                    onClicked: win.pickLanguage(targetButton, win.val("translate.target"), [{ code: "", name: qsTr("System language") }],
+                                                win.settings.languages, (code) => win.set("translate.target", code))
+                }
+            }
             TextRow { title: qsTr("LibreTranslate URL"); key: "translate.libretranslate_url"; placeholder: "http://localhost:5000" }
             TextRow { title: qsTr("LibreTranslate API key"); key: "translate.libretranslate_key"; secret: true }
         }
@@ -700,18 +708,58 @@ ApplicationWindow {
                     font.italic: true
                 }
             }
-            ComboBox {
+            LanguageButton {
+                id: addLanguage
                 width: parent.width
-                textRole: "name"
-                valueRole: "code"
-                displayText: qsTr("Add a language…")
-                model: win.settings.languages.filter(l => lr.codes.indexOf(l.code) < 0)
-                onActivated: {
+                text: qsTr("Add a language…")
+                onClicked: win.pickLanguage(addLanguage, "", [], win.settings.languages.filter(l => lr.codes.indexOf(l.code) < 0), (code) => {
                     const l = lr.codes.slice()
-                    l.push(currentValue)
+                    l.push(code)
                     win.set(lr.key, l)
-                }
+                })
             }
+        }
+    }
+
+    // One searchable language picker for every language setting.
+    function languageName(code) {
+        for (const l of win.settings.languages) if (l.code === code) return l.name
+        return code
+    }
+    property var languagePicked: null
+    function pickLanguage(anchor, current, pinned, languages, onPicked) {
+        languagePicked = onPicked
+        langPicker.pinned = pinned
+        langPicker.languages = languages
+        langPicker.current = current
+        const p = anchor.mapToItem(Overlay.overlay, 0, anchor.height + 4)
+        langPicker.x = Math.min(p.x, Overlay.overlay.width - langPicker.width - 8)
+        langPicker.y = Math.min(p.y, Overlay.overlay.height - 388)
+        langPicker.open()
+    }
+    LanguageMenu {
+        id: langPicker
+        parent: Overlay.overlay
+        accent: win.accent
+        onPicked: (code) => { if (win.languagePicked) win.languagePicked(code) }
+    }
+
+    component LanguageButton: Button {
+        id: lb
+        height: 36
+        contentItem: Text {
+            text: lb.text
+            color: win.fg
+            font.pixelSize: 13
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+            rightPadding: 22
+            Icon { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 14; color: win.fgDim }
+        }
+        background: Rectangle {
+            radius: 10
+            color: lb.hovered ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.05)
+            border.color: win.line
         }
     }
 

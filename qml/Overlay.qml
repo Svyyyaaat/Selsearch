@@ -770,6 +770,7 @@ Window {
             id: langMenu
             parent: scene
             property real closedAt: 0
+            accent: win.accent
             onClosed: closedAt = Date.now()
             onPicked: (code) => {
                 win.lens.setTranslateTarget(code)
