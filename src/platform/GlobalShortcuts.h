@@ -35,6 +35,12 @@ public:
     virtual QString backendName() const = 0;
     // (Re)register the given shortcuts. Asynchronous for the portal.
     virtual void setShortcuts(const QList<Shortcut> &shortcuts) = 0;
+    // Native key recording for the Settings key recorder: while on, every
+    // key press is swallowed (no system menu on Alt, no Start menu on Win,
+    // no other app's hotkeys) and reported through keysCaptured(). Only
+    // where kind() is InApp.
+    virtual bool canCaptureKeys() const { return false; }
+    virtual void setCapturingKeys(bool) {}
 
 Q_SIGNALS:
     void activated(const QString &id);
@@ -42,6 +48,8 @@ Q_SIGNALS:
     void failed(const QString &id, const QString &reason);
     // Portal: the keys the desktop actually bound ("Meta+S"), per id.
     void bound(const QString &id, const QString &trigger);
+    // A key press while capturing, as a portable sequence ("Alt+Shift+S", "Esc").
+    void keysCaptured(const QString &sequence);
 };
 
 // The best backend for this platform/session; never null (a no-op backend

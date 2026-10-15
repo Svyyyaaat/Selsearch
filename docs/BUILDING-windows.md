@@ -31,6 +31,17 @@ Alt+Space normally opens the active window's system menu (Move, Size, Close…).
 While Selsearch holds the hotkey it wins, like PowerToys Run does; quit
 Selsearch or change `shortcuts.launcher` to get the menu back.
 
+Releasing Alt or Win after a hotkey would normally open the focused window's
+menu bar or the Start menu, because the hotkey's own key never reaches
+anyone. On every hotkey with Alt or Win, `WindowsShortcuts.cpp` injects an
+unassigned key (0xE8, as AutoHotkey does) while the modifier is still down.
+
+The key recorder in Settings → Shortcuts reads keys through a low-level
+keyboard hook while it records, so Alt+…, Win+… and keys another program
+already holds are recorded instead of acted on. The hook swallows every key
+until a key is recorded, Esc is pressed, the window loses focus, or 20 s pass.
+A key Windows or another program won't give up is shown under its row.
+
 Focus: Windows only lets the program that received the last input bring a
 window to the front. A hotkey or a tray click counts; for commands sent with
 `selsearch.exe` the CLI calls `AllowSetForegroundWindow` first. As a fallback

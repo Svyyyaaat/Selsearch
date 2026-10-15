@@ -237,6 +237,25 @@ void Settings::openConfigFile()
     QDesktopServices::openUrl(QUrl::fromLocalFile(m_config.path()));
 }
 
+void Settings::setNativeKeyCapture(bool on)
+{
+    if (m_nativeKeyCapture == on)
+        return;
+    m_nativeKeyCapture = on;
+    Q_EMIT shortcutStateChanged();
+}
+
+void Settings::setShortcutError(const QString &id, const QString &reason)
+{
+    if (m_shortcutErrors.value(id).toString() == reason)
+        return;
+    if (reason.isEmpty())
+        m_shortcutErrors.remove(id);
+    else
+        m_shortcutErrors.insert(id, reason);
+    Q_EMIT shortcutStateChanged();
+}
+
 QString Settings::shortcutMode() const
 {
 #ifdef Q_OS_WIN

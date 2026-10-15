@@ -1,4 +1,4 @@
-First public build of Selsearch: freeze the screen, select text or part of an image, then copy, translate, search or ask a local AI about it. Plus an Alt+Space launcher.
+Selsearch: freeze the screen, select text or part of an image, then copy, translate, search or ask a local AI about it. Plus an Alt+Space launcher.
 
 ## Downloads
 
@@ -26,7 +26,10 @@ On first start a welcome page lets you download the text recognition models
 
 ## Known limits
 
-- The Windows build has been tested under Wine, not yet on real Windows.
-  Please report hotkey, focus or multi-monitor DPI problems.
+- Windows 10/11: tested on real hardware. Hotkeys default to Alt+… because
+  Windows keeps Win+S and Win+Shift+S for itself; change them in Settings →
+  Shortcuts.
+- Hyprland with several monitors: selecting on a monitor other than the one
+  the lens opened on hasn't been confirmed on real hardware yet.
 - GNOME has no layer-shell, so the overlay can't cover everything there; the
   launcher and capture work.

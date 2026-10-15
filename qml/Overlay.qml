@@ -211,6 +211,7 @@ Window {
     function finishRegion(animated) {
         phase = "selected"
         lens.activeScreen = lensScreen.name
+        lens.recognizeRegion(lensScreen.name, sel)   // only with "read text in the selection only"
         if (animated) {
             radiusAnim.restart()
             waveAnim.restart()
@@ -266,6 +267,45 @@ Window {
     }
 
     Timer { id: closeSoon; interval: 650; onTriggered: win.lens.close() }
+
+    // ---- keys -----------------------------------------------------------------
+    readonly property int ctrl: Qt.ControlModifier
+    function handlesKey(key, mods) {
+        switch (key) {
+        case Qt.Key_Escape: case Qt.Key_Return: case Qt.Key_Enter: return true
+        case Qt.Key_C: return mods === ctrl || mods === (ctrl | Qt.ShiftModifier)
+        case Qt.Key_A: return mods === ctrl || mods === Qt.NoModifier
+        case Qt.Key_S: return mods === ctrl
+        case Qt.Key_T: return mods === Qt.NoModifier
+        }
+        return false
+    }
+    function handleKey(key, mods) {
+        const any = hasSel || isTextSel
+        switch (key) {
+        case Qt.Key_Escape:
+            if (langMenu.opened) langMenu.close()
+            else if (phase !== "idle") clearSelection()
+            else lens.close()
+            break
+        case Qt.Key_Return: case Qt.Key_Enter:
+            if (any) doSearch()
+            break
+        case Qt.Key_C:
+            if (mods & Qt.ShiftModifier) doCopyText(); else doCopy()
+            break
+        case Qt.Key_A:
+            if (mods === ctrl) selectAllText()
+            else if (any && lens.aiEnabled) doAsk()
+            break
+        case Qt.Key_S:
+            if (hasSel) lens.saveImage(lensScreen.name, sel)
+            break
+        case Qt.Key_T:
+            if (any) doTranslate(); else translateAll()
+            break
+        }
+    }
 
     // ---- animations -------------------------------------------------------------
     NumberAnimation { id: focusAnim; target: win; property: "focusAmt"; to: 1; duration: 260; easing.type: Easing.OutCubic }
@@ -323,6 +363,7 @@ Window {
             property color rimColor: win.rimA
             property color rimColor2: win.rimB
             property color dotColor: win.themeName === "aurora" ? win.rimB : win.accent
+            property real boost: win.lens.dotBrightness
             fragmentShader: "qrc:/shaders/glass.frag.qsb"
         }
 
@@ -655,29 +696,23 @@ Window {
         }
 
         // ---- keyboard ---------------------------------------------------------
+        // Keyboard focus can sit on another screen's overlay than the one with
+        // the selection (Hyprland gives it to whichever lens surface it
+        // likes); keys pressed on an idle, inactive overlay go to the active one.
         Keys.onPressed: (event) => {
-            if (event.key === Qt.Key_Escape) {
-                if (langMenu.opened) langMenu.close()
-                else if (win.phase !== "idle") win.clearSelection()
-                else win.lens.close()
-            } else if (event.matches(StandardKey.Copy)) {
-                win.doCopy()
-            } else if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.ShiftModifier)) {
-                win.doCopyText()
-            } else if (event.matches(StandardKey.SelectAll)) {
-                win.selectAllText()
-            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                if (win.hasSel || win.isTextSel) win.doSearch()
-            } else if (event.key === Qt.Key_T && event.modifiers === Qt.NoModifier) {
-                if (win.hasSel || win.isTextSel) win.doTranslate(); else win.translateAll()
-            } else if (event.key === Qt.Key_A && event.modifiers === Qt.NoModifier) {
-                if ((win.hasSel || win.isTextSel) && win.lens.aiEnabled) win.doAsk()
-            } else if (event.matches(StandardKey.Save)) {
-                if (win.hasSel) win.lens.saveImage(win.lensScreen.name, win.sel)
-            } else {
-                return
-            }
+            const mods = event.modifiers & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier | Qt.MetaModifier)
+            if (!win.handlesKey(event.key, mods)) return
             event.accepted = true
+            if (win.phase === "idle" && win.lens.activeScreen !== "" && win.lens.activeScreen !== win.lensScreen.name)
+                win.lens.forwardKey(event.key, mods)
+            else
+                win.handleKey(event.key, mods)
+        }
+        Connections {
+            target: win.lens
+            function onKeyForwarded(key, mods) {
+                if (win.lens.activeScreen === win.lensScreen.name) win.handleKey(key, mods)
+            }
         }
 
         // ---- chrome -------------------------------------------------------------
@@ -715,6 +750,9 @@ Window {
             onCopyText: win.doCopyText()
             onTranslate: win.doTranslate()
             onPickLanguage: (anchor) => {
+                // Pressing the button already closed an open menu (press
+                // outside); this click must not reopen it.
+                if (langMenu.visible || Date.now() - langMenu.closedAt < 300) { langMenu.close(); return }
                 const p = anchor.mapToItem(scene, 0, anchor.height + 6)
                 langMenu.languages = win.lens.translateLanguages()
                 langMenu.recent = win.lens.recentTranslateLanguages()
@@ -731,6 +769,9 @@ Window {
         LanguageMenu {
             id: langMenu
             parent: scene
+            property real closedAt: 0
+            accent: win.accent
+            onClosed: closedAt = Date.now()
             onPicked: (code) => {
                 win.lens.setTranslateTarget(code)
                 if (win.translated) win.lens.clearTranslations(win.lensScreen.name)

@@ -283,6 +283,9 @@ ApplicationWindow {
                     }
                 }
             }
+            SliderRow { title: qsTr("Dot brightness"); key: "lens.dot_brightness"; from: 0.5; to: 3
+                subtitle: qsTr("How bright the dot field is. Raise it if the dots are hard to see with your accent colour.")
+                visible: win.val("general.theme") !== "mono" }
             SwitchRow { title: qsTr("Follow the desktop accent colour"); key: "general.follow_portal_accent"
                 subtitle: win.isWindows ? qsTr("Uses the accent colour from Windows settings.")
                                         : qsTr("Reads the accent from xdg-desktop-portal when your desktop provides one (GNOME, KDE). Falls back to the colour above.") }
@@ -361,6 +364,10 @@ ApplicationWindow {
                     }
                 }
             }
+            SwitchRow { title: qsTr("Read text on all screens"); key: "ocr.all_screens"
+                subtitle: qsTr("Off: only the screen the lens opens on is read right away; another screen is read when you select on it.") }
+            SwitchRow { title: qsTr("Read text only inside the selection"); key: "ocr.selection_only"
+                subtitle: qsTr("Nothing is read until you select an area, then only that area. Lighter on the CPU; you can't drag over text before selecting.") }
             NumberRow { title: qsTr("Unload models after (seconds)"); key: "ocr.unload_after_s"; from: 0; to: 3600
                 subtitle: qsTr("Frees memory when idle. 0 keeps them loaded for the fastest lens.") }
         }
@@ -378,8 +385,16 @@ ApplicationWindow {
             ChoiceRow { title: qsTr("Web translator"); key: "translate.web_service"
                 options: [{ id: "google", name: "Google Translate" }, { id: "deepl", name: "DeepL" }]
                 subtitle: qsTr("Opens with the selected text. This sends the text to that site.") }
-            ChoiceRow { title: qsTr("Translate into"); key: "translate.target"; combo: true
-                options: [{ id: "", name: qsTr("System language") }].concat(win.settings.languages.map(l => ({ id: l.code, name: l.name }))) }
+            SettingRow {
+                title: qsTr("Translate into")
+                LanguageButton {
+                    id: targetButton
+                    width: 260
+                    text: { const v = win.val("translate.target"); return v ? win.languageName(v) : qsTr("System language") }
+                    onClicked: win.pickLanguage(targetButton, win.val("translate.target"), [{ code: "", name: qsTr("System language") }],
+                                                win.settings.languages, (code) => win.set("translate.target", code))
+                }
+            }
             TextRow { title: qsTr("LibreTranslate URL"); key: "translate.libretranslate_url"; placeholder: "http://localhost:5000" }
             TextRow { title: qsTr("LibreTranslate API key"); key: "translate.libretranslate_key"; secret: true }
         }
@@ -493,7 +508,23 @@ ApplicationWindow {
         id: scr
         property string key
         property bool recording: false
-        subtitle: recording ? qsTr("Press the new keys… (Esc to cancel, Backspace for default)") : ""
+        readonly property string error: win.settings.shortcutErrors[key.split(".")[1]] || ""
+        subtitle: recording ? qsTr("Press the new keys… (Esc to cancel, Backspace for default)")
+                  : error ? qsTr("Not active: %1").arg(error) : ""
+        // Windows: keys come from a system keyboard hook, so Alt and Win
+        // combinations reach us instead of opening menus.
+        onRecordingChanged: if (win.settings.nativeKeyCapture) win.settings.setKeyCapture(recording)
+        function finish(sequence) {
+            if (sequence === "Esc") { recording = false; return }
+            if (sequence === "Backspace") { win.cfg.reset(key); recording = false; return }
+            win.set(key, sequence)
+            recording = false
+        }
+        Connections {
+            target: win.settings
+            enabled: scr.recording && win.settings.nativeKeyCapture
+            function onKeysCaptured(sequence) { scr.finish(sequence) }
+        }
         Rectangle {
             id: keyBox
             width: 220
@@ -517,14 +548,10 @@ ApplicationWindow {
                 Keys.onPressed: (event) => {
                     if (!scr.recording) return
                     event.accepted = true
+                    if (win.settings.nativeKeyCapture) return
                     const mods = [Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta, Qt.Key_Super_L, Qt.Key_Super_R, Qt.Key_AltGr]
                     if (mods.indexOf(event.key) >= 0) return   // wait for the actual key
-                    if (event.key === Qt.Key_Escape && event.modifiers === Qt.NoModifier) { scr.recording = false; return }
-                    if (event.key === Qt.Key_Backspace && event.modifiers === Qt.NoModifier) {
-                        win.cfg.reset(scr.key); scr.recording = false; return
-                    }
-                    win.set(scr.key, win.settings.sequenceFor(event.key, event.modifiers))
-                    scr.recording = false
+                    scr.finish(win.settings.sequenceFor(event.key, event.modifiers))
                 }
             }
         }
@@ -681,18 +708,58 @@ ApplicationWindow {
                     font.italic: true
                 }
             }
-            ComboBox {
+            LanguageButton {
+                id: addLanguage
                 width: parent.width
-                textRole: "name"
-                valueRole: "code"
-                displayText: qsTr("Add a language…")
-                model: win.settings.languages.filter(l => lr.codes.indexOf(l.code) < 0)
-                onActivated: {
+                text: qsTr("Add a language…")
+                onClicked: win.pickLanguage(addLanguage, "", [], win.settings.languages.filter(l => lr.codes.indexOf(l.code) < 0), (code) => {
                     const l = lr.codes.slice()
-                    l.push(currentValue)
+                    l.push(code)
                     win.set(lr.key, l)
-                }
+                })
             }
+        }
+    }
+
+    // One searchable language picker for every language setting.
+    function languageName(code) {
+        for (const l of win.settings.languages) if (l.code === code) return l.name
+        return code
+    }
+    property var languagePicked: null
+    function pickLanguage(anchor, current, pinned, languages, onPicked) {
+        languagePicked = onPicked
+        langPicker.pinned = pinned
+        langPicker.languages = languages
+        langPicker.current = current
+        const p = anchor.mapToItem(Overlay.overlay, 0, anchor.height + 4)
+        langPicker.x = Math.min(p.x, Overlay.overlay.width - langPicker.width - 8)
+        langPicker.y = Math.min(p.y, Overlay.overlay.height - 388)
+        langPicker.open()
+    }
+    LanguageMenu {
+        id: langPicker
+        parent: Overlay.overlay
+        accent: win.accent
+        onPicked: (code) => { if (win.languagePicked) win.languagePicked(code) }
+    }
+
+    component LanguageButton: Button {
+        id: lb
+        height: 36
+        contentItem: Text {
+            text: lb.text
+            color: win.fg
+            font.pixelSize: 13
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+            rightPadding: 22
+            Icon { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 14; color: win.fgDim }
+        }
+        background: Rectangle {
+            radius: 10
+            color: lb.hovered ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.05)
+            border.color: win.line
         }
     }
 
@@ -701,6 +768,72 @@ ApplicationWindow {
         parent: Overlay.overlay
         anchors.centerIn: parent
         onAccepted: (c) => win.set("general.accent", c.toString())
+    }
+
+    component SliderRow: SettingRow {
+        id: slr
+        property string key
+        property real from: 0
+        property real to: 1
+        Row {
+            spacing: 10
+            // Preview: a few dots at the chosen brightness on a darkened backdrop.
+            Rectangle {
+                width: 64; height: 24; radius: 6
+                anchors.verticalCenter: parent.verticalCenter
+                color: "#121318"
+                border.color: win.line
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 4
+                    Repeater {
+                        model: 6
+                        Rectangle {
+                            required property int index
+                            readonly property real level: Math.min(1, (0.25 + index * 0.1) * slider.value)
+                            width: 3 + 3 * level; height: width; radius: width / 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Qt.tint(win.accent, Qt.rgba(1, 1, 1, Math.max(0, Math.min(0.4, (slider.value - 1) * 0.2))))
+                            opacity: level
+                        }
+                    }
+                }
+            }
+            Slider {
+                id: slider
+                width: 160
+                anchors.verticalCenter: parent.verticalCenter
+                from: slr.from
+                to: slr.to
+                stepSize: 0.1
+                value: Number(win.val(slr.key)) || 1
+                onMoved: win.set(slr.key, Math.round(value * 10) / 10)
+                background: Rectangle {
+                    x: slider.leftPadding
+                    y: slider.topPadding + slider.availableHeight / 2 - height / 2
+                    width: slider.availableWidth
+                    height: 4
+                    radius: 2
+                    color: "#2c2e35"
+                    Rectangle { width: slider.visualPosition * parent.width; height: parent.height; radius: 2; color: win.accent }
+                }
+                handle: Rectangle {
+                    x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
+                    y: slider.topPadding + slider.availableHeight / 2 - height / 2
+                    width: 18; height: 18; radius: 9
+                    color: slider.pressed ? Qt.lighter(win.accent, 1.15) : win.accent
+                    border.color: "#14151a"
+                    border.width: 2
+                }
+            }
+            Text {
+                width: 44
+                anchors.verticalCenter: parent.verticalCenter
+                text: Math.round(slider.value * 100) + "%"
+                color: win.fgDim
+                font.pixelSize: 13
+            }
+        }
     }
 
     component NumberRow: SettingRow {

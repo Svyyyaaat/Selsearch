@@ -115,9 +115,13 @@ bool App::init(QString *error)
     // System-wide hotkeys owned by the app (where the platform allows it).
     m_shortcuts = createGlobalShortcuts();
     connect(m_shortcuts.get(), &GlobalShortcuts::activated, this, &App::onShortcut);
-    connect(m_shortcuts.get(), &GlobalShortcuts::failed, this, [](const QString &id, const QString &reason) {
+    connect(m_shortcuts.get(), &GlobalShortcuts::failed, this, [this](const QString &id, const QString &reason) {
         qCWarning(lcApp) << "shortcut" << id << "not registered:" << reason;
+        m_settings->setShortcutError(id, reason);
     });
+    m_settings->setNativeKeyCapture(m_shortcuts->canCaptureKeys());
+    connect(m_settings.get(), &Settings::keyCaptureRequested, m_shortcuts.get(), &GlobalShortcuts::setCapturingKeys);
+    connect(m_shortcuts.get(), &GlobalShortcuts::keysCaptured, m_settings.get(), &Settings::keysCaptured);
     connect(m_config.get(), &Config::changed, this, [this](const QString &key) {
         if (key.startsWith(QLatin1String("shortcuts.")))
             applyShortcuts();
@@ -157,6 +161,8 @@ void App::applyShortcuts()
         {QStringLiteral("lens"), tr("Search the screen"), QKeySequence(m_config->string(QStringLiteral("shortcuts.lens")))},
         {QStringLiteral("lens_text"), tr("Select text on the screen"), QKeySequence(m_config->string(QStringLiteral("shortcuts.lens_text")))},
     };
+    for (const auto &s : list)
+        m_settings->setShortcutError(s.id, {});  // failed() sets them again
     m_shortcuts->setShortcuts(list);
 #ifdef Q_OS_WIN
     if (m_tray) {

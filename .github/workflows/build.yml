@@ -10,6 +10,10 @@ on:
         description: "Publish a GitHub release with this tag (e.g. v0.1.0); empty: just build"
         required: false
         default: ""
+      notes_only:
+        description: "Only update the notes of the existing release (no builds)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,6 +26,7 @@ env:
 
 jobs:
   linux:
+    if: ${{ !inputs.notes_only }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4.2.2
@@ -79,6 +84,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   windows:
+    if: ${{ !inputs.notes_only }}
     runs-on: windows-2022
     defaults:
       run:
@@ -155,6 +161,7 @@ jobs:
           path: packaging/windows/Selsearch-*-setup.exe
 
   fedora:
+    if: ${{ !inputs.notes_only }}
     runs-on: ubuntu-24.04
     container: fedora:43
     steps:
@@ -174,7 +181,11 @@ jobs:
           path: dist/*.rpm
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
+    # Runs after all builds succeeded, or alone with notes_only.
+    if: >-
+      always() && !cancelled() &&
+      (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')) &&
+      (inputs.notes_only || (needs.linux.result == 'success' && needs.windows.result == 'success' && needs.fedora.result == 'success'))
     needs: [linux, windows, fedora]
     runs-on: ubuntu-24.04
     permissions:
@@ -183,11 +194,22 @@ jobs:
       - uses: actions/checkout@v4.2.2
 
       - uses: actions/download-artifact@v4.3.0
+        if: ${{ !inputs.notes_only }}
         with:
           path: assets
           merge-multiple: true
 
+      - name: Update notes
+        if: ${{ inputs.notes_only }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release }}
+        run: |
+          sed "s/@TAG@/$TAG/g" packaging/release-notes.md > notes.md
+          gh release edit "$TAG" --notes-file notes.md
+
       - name: Publish
+        if: ${{ !inputs.notes_only }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.release || github.ref_name }}

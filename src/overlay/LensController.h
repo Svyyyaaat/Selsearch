@@ -78,6 +78,9 @@ private:
     QVariantList m_windows;  // [{x,y,w,h,title,appId}] in logical window coords, topmost first
     QVariantList m_translations;  // [{x,y,w,h,text,bg,fg}]
     bool m_ocrBusy = false;
+    bool m_ocrStarted = false;   // whole-screen OCR requested this session
+    int m_ocrRequest = 0;        // newest request; older results are dropped
+    QRectF m_ocrRegion;          // region of the last region-only OCR
     bool m_focused = false;
     bool m_translating = false;
 };
@@ -98,6 +101,8 @@ class LensController : public QObject {
     Q_PROPERTY(QString imageEngineName READ imageEngineName NOTIFY settingsChanged)
     Q_PROPERTY(QString translateTarget READ translateTarget NOTIFY settingsChanged)
     Q_PROPERTY(QString activeScreen READ activeScreen WRITE setActiveScreen NOTIFY activeScreenChanged)
+    Q_PROPERTY(bool ocrSelectionOnly READ ocrSelectionOnly NOTIFY settingsChanged)
+    Q_PROPERTY(qreal dotBrightness READ dotBrightness NOTIFY settingsChanged)
 public:
     LensController(Config &config, OcrService &ocr, QObject *parent = nullptr);
     ~LensController() override;
@@ -111,6 +116,8 @@ public:
     QColor accent() const;
     bool darkUi() const { return true; }
     bool recognizeText() const;
+    bool ocrSelectionOnly() const;
+    qreal dotBrightness() const;
     bool snapToWindows() const;
     bool showHints() const;
     QString onSelect() const;
@@ -139,6 +146,11 @@ public:
     Q_INVOKABLE void setTranslateTarget(const QString &code);
     Q_INVOKABLE QVariantList translateLanguages() const;
     Q_INVOKABLE QStringList recentTranslateLanguages() const;
+    // Selection-only OCR: read the text inside `rect` (logical) of `screen`.
+    Q_INVOKABLE void recognizeRegion(const QString &screen, const QRectF &rect);
+    // A key pressed on an overlay without the selection goes to the overlay
+    // that has it (keyboard focus can sit on another screen's overlay).
+    Q_INVOKABLE void forwardKey(int key, int modifiers) { Q_EMIT keyForwarded(key, modifiers); }
 
     QList<LensScreen *> screens() const { return m_screens; }
 
@@ -147,6 +159,7 @@ Q_SIGNALS:
     void settingsChanged();
     void activeScreenChanged();
     void notify(const QString &message);   // snackbar text on the active overlay
+    void keyForwarded(int key, int modifiers);
     void openUrl(const QUrl &url);         // handled by the app (panel or browser)
     void askRequested(const QImage &image, const QString &text);  // handled by the app
     void failed(const QString &message);
@@ -155,7 +168,7 @@ private:
     void rebuildScreens();
     void createWindow(LensScreen *s);
     void onCaptured(const CaptureResult &result);
-    void runOcr(LensScreen *s);
+    void runOcr(LensScreen *s, const QRectF &logicalRegion = {});
     QImage crop(const QString &screen, const QRectF &logicalRect) const;
     LensScreen *find(const QString &name) const;
     void showWindows();
