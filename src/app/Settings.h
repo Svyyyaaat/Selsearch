@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QVariantList>
+#include <QUrl>
 #include <QVariantMap>
 
 class QQmlEngine;
@@ -78,6 +79,8 @@ public:
     void setShortcutError(const QString &id, const QString &reason);  // empty reason clears
     // QML recorder: start/stop native capture; results come as keysCaptured().
     Q_INVOKABLE void setKeyCapture(bool on) { Q_EMIT keyCaptureRequested(on); }
+    // Opens `url` in the results panel with persistent cookies, to sign in.
+    Q_INVOKABLE void signIn(const QString &url) { Q_EMIT signInRequested(QUrl(url)); }
 
 Q_SIGNALS:
     void aiModelsChanged();
@@ -87,6 +90,7 @@ Q_SIGNALS:
     void shortcutStateChanged();
     void keyCaptureRequested(bool on);
     void keysCaptured(const QString &sequence);
+    void signInRequested(const QUrl &url);
 
 private:
     Config &m_config;

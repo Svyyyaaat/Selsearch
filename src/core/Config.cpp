@@ -45,6 +45,7 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("search.suggestions"), false},  // as-you-type suggestions from the engine
         {QStringLiteral("search.open_in"), QStringLiteral("panel")},  // panel | browser
         {QStringLiteral("search.persist_cookies"), false},
+        {QStringLiteral("search.image_open_in"), QString()},  // "" = like search.open_in | panel | browser
 
         // OCR
         {QStringLiteral("ocr.engine"), QStringLiteral("auto")},  // auto | paddle | tesseract
