@@ -1,6 +1,6 @@
 # Maintainer: Svyyyaaat
 pkgname=selsearch-git
-pkgver=0.1.2
+pkgver=0.1.3
 pkgrel=1
 pkgdesc="Local screen search for Wayland: freeze the screen, select text or images, copy, translate, search or ask AI. Plus an Alt+Space launcher."
 arch=('x86_64' 'aarch64')
@@ -24,7 +24,7 @@ sha256sums=('SKIP')
 
 pkgver() {
     cd selsearch
-    printf "0.1.2.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+    printf "0.1.3.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 build() {
