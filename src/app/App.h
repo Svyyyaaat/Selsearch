@@ -36,7 +36,9 @@ public:
     // Opens a URL produced by the UI. "selsearch:search?q=..." is resolved
     // with the configured engine. Web pages go to the results panel or the
     // browser (search.open_in); other URLs (files, apps) open as is.
-    void openUrl(const QUrl &url, const QString &title = {});
+    void openUrl(const QUrl &url, const QString &title = {}) { openUrlIn(url, title, {}); }
+    // openIn: "panel" | "browser"; empty = the search.open_in setting.
+    void openUrlIn(const QUrl &url, const QString &title, const QString &openIn);
 
 private:
     void handle(const QJsonObject &request, const std::function<void(const QJsonObject &)> &reply);

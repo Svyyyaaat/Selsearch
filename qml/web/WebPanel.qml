@@ -66,6 +66,10 @@ Window {
         persistentStoragePath: bridge.persistent ? bridge.storagePath : ""
         httpCacheType: bridge.persistent ? WebEngineProfile.DiskHttpCache : WebEngineProfile.MemoryHttpCache
         persistentCookiesPolicy: bridge.persistent ? WebEngineProfile.AllowPersistentCookies : WebEngineProfile.NoPersistentCookies
+        // The default user agent is Chrome's plus "QtWebEngine/x.y.z"; sites
+        // such as Google treat that token as a bot hint (more CAPTCHAs, sign-in
+        // refused). Present the plain Chrome string of the same engine.
+        Component.onCompleted: httpUserAgent = httpUserAgent.replace(/ QtWebEngine\/[0-9.]+/, "")
     }
 
     Item {

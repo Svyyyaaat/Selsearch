@@ -64,6 +64,9 @@ Window {
 
     // Lines index for nearest-word lookups: [{top, bottom, first, last}]
     property var lines: []
+    // Row buckets for hit tests: rowIndex[floor(y / 32)] = [word indices].
+    // wordAt() runs on every mouse move; this keeps it to a handful of words.
+    property var rowIndex: []
     function reloadWords() {
         words = lensScreen.words.map(w => ({ x: w.x, y: w.y, w: w.w, h: w.h, text: w.text, line: w.line, index: w.index, space: w.space }))
     }
@@ -76,6 +79,15 @@ Window {
             else { l.top = Math.min(l.top, w.y); l.bottom = Math.max(l.bottom, w.y + w.h); l.last = w.index }
         }
         lines = out.filter(l => l !== undefined)
+        let rowsIdx = []
+        for (let w of words) {
+            for (let r = Math.floor((w.y - 3) / 32); r <= Math.floor((w.y + w.h + 3) / 32); ++r) {
+                if (r < 0) continue
+                if (!rowsIdx[r]) rowsIdx[r] = []
+                rowsIdx[r].push(w.index)
+            }
+        }
+        rowIndex = rowsIdx
         if (lens.mode === "translate" && words.length > 0 && lensScreen.focused && !translated)
             translateAll()
         if (words.length > 0)
@@ -127,7 +139,9 @@ Window {
         return x >= r.x - pad && x <= r.x + rw + pad && y >= r.y - pad && y <= r.y + rh + pad
     }
     function wordAt(x, y) {
-        for (let w of words) if (contains(w, x, y, 3)) return w.index
+        const bucket = rowIndex[Math.floor(y / 32)]
+        if (!bucket) return -1
+        for (const i of bucket) if (contains(words[i], x, y, 3)) return i
         return -1
     }
     // Nearest word in reading order, for extending a text selection.
@@ -173,10 +187,25 @@ Window {
         }
         return Qt.CrossCursor
     }
+    // Words whose centre is inside `r`, in reading order (only the row
+    // buckets the rectangle spans are scanned).
     function wordsIn(r) {
-        let out = []
-        for (let w of words) if (contains(r, w.x + w.w / 2, w.y + w.h / 2)) out.push(w)
-        return out
+        const rw = r.width !== undefined ? r.width : r.w, rh = r.height !== undefined ? r.height : r.h
+        if (!(rw > 0 && rh > 0)) return []
+        const seen = {}
+        let idx = []
+        for (let b = Math.max(0, Math.floor(r.y / 32)); b <= Math.floor((r.y + rh) / 32); ++b) {
+            const bucket = rowIndex[b]
+            if (!bucket) continue
+            for (const i of bucket) {
+                if (seen[i]) continue
+                seen[i] = true
+                const w = words[i]
+                if (contains(r, w.x + w.w / 2, w.y + w.h / 2)) idx.push(i)
+            }
+        }
+        idx.sort((p, q) => p - q)
+        return idx.map(i => words[i])
     }
     function joinWords(list) {
         let text = "", lastLine = -1, lastIndex = -2
@@ -341,12 +370,56 @@ Window {
             smooth: true
         }
 
+        // ---- backdrop -----------------------------------------------------------
+        // Two passes: `cellField` computes one intensity per dot cell into a
+        // texture of (cols x rows) texels; `backdrop` draws the frame, the dots
+        // and the selection rim per pixel from it. The backdrop is cached in a
+        // layer, so frames where only the hover pill, a word highlight or the
+        // toolbar change (every mouse move) just composite the cached texture
+        // instead of re-running the shaders over the whole screen.
+        readonly property real dotSpacing: 9
+        readonly property bool dotsOn: win.themeName !== "mono"
+        readonly property int cols: Math.ceil(width / dotSpacing)
+        readonly property int rows: Math.ceil(height / dotSpacing)
+
+        ShaderEffect {
+            id: cellField
+            visible: false
+            width: scene.cols * scene.dotSpacing
+            height: scene.rows * scene.dotSpacing
+            property vector4d sel: backdrop.sel
+            property vector2d size: backdrop.size
+            property vector2d cellCount: backdrop.cellCount
+            property real radius: backdrop.radius
+            property real hasSel: backdrop.hasSel
+            property real focusAmt: win.focusAmt
+            property real wave: win.wave
+            property real pulse: win.pulse
+            property real time: win.time
+            property real dots: backdrop.dots
+            property real spacing: scene.dotSpacing
+            property real boost: win.lens.dotBrightness
+            fragmentShader: "qrc:/shaders/dotcells.frag.qsb"
+        }
+        ShaderEffectSource {
+            id: cellTexture
+            visible: false
+            sourceItem: scene.dotsOn ? cellField : null
+            textureSize: Qt.size(scene.cols, scene.rows)
+            smooth: false   // nearest: one texel is one dot
+            hideSource: true
+        }
+
         ShaderEffect {
             id: backdrop
             anchors.fill: parent
+            layer.enabled: true
+            layer.smooth: false
             property variant source: frame
+            property variant cells: scene.dotsOn ? cellTexture : frame
             property vector4d sel: Qt.vector4d(win.sel.x, win.sel.y, win.sel.width, win.sel.height)
             property vector2d size: Qt.vector2d(width, height)
+            property vector2d cellCount: Qt.vector2d(scene.cols, scene.rows)
             property real radius: win.isTextSel ? 0 : win.selRadius
             property real hasSel: win.hasSel && !win.isTextSel ? 1 : 0
             property real focusAmt: win.focusAmt
@@ -355,15 +428,13 @@ Window {
             property real rimAlpha: win.phase === "drawing" ? 0.75 : 0.95
             property real rimWidth: win.themeName === "aurora" ? 2.0 : 1.5
             property real wave: win.wave
-            property real pulse: win.pulse
-            property real time: win.time
-            property real dots: win.themeName === "mono" ? 0 : (win.isTextSel ? 0.25 : 1)
-            property real spacing: 9
+            property real dots: scene.dotsOn ? (win.isTextSel ? 0.25 : 1) : 0
+            property real spacing: scene.dotSpacing
             property real tintMix: win.themeName === "aurora" ? 0.14 : 0
+            property real boost: win.lens.dotBrightness
             property color rimColor: win.rimA
             property color rimColor2: win.rimB
             property color dotColor: win.themeName === "aurora" ? win.rimB : win.accent
-            property real boost: win.lens.dotBrightness
             fragmentShader: "qrc:/shaders/glass.frag.qsb"
         }
 

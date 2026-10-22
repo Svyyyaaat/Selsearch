@@ -56,6 +56,14 @@ public:
     // Returns an empty string only if `candidates` is non-empty and contains no
     // recognition model. See the .cpp for the exact ranking.
     static QString bestRecognitionModel(const QStringList &languages, const QStringList &candidates = {});
+    // The recognition models to run for `languages`: the fewest that cover
+    // every requested language that has a model, ordered by the first
+    // language each one is needed for (ja+ru: zh/ja/en model, then eslav;
+    // ru+en: eslav alone, since every model reads English). Never empty when
+    // `candidates` holds a recognition model: falls back to
+    // bestRecognitionModel(). At most kMaxRecognitionModels.
+    static QStringList recognitionModelsFor(const QStringList &languages, const QStringList &candidates = {});
+    static constexpr int kMaxRecognitionModels = 4;
     static const ModelSpec *findSpec(const QString &id);
     // A model is "present" when all of its files exist with the expected size
     // (hashes are verified at download time, before the final rename).
@@ -65,7 +73,7 @@ public:
     // ---- instance API ----
     QString directory() const { return m_dir; }
     const QList<ModelSpec> &specs() const { return m_specs; }
-    // Model ids needed for `languages`: the detector plus the best recognizer.
+    // Model ids needed for `languages`: the detector plus recognitionModelsFor().
     QStringList requiredFor(const QStringList &languages) const;
     QStringList missingFor(const QStringList &languages) const;
     bool haveModelsFor(const QStringList &languages) const { return missingFor(languages).isEmpty(); }

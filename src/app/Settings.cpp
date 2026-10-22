@@ -108,10 +108,14 @@ QString Settings::ocrStatus() const
     const QString langText = langs.join(QStringLiteral(", "));
     ModelStore store;
     const QStringList missing = store.missingFor(langs);
-    const QString rec = ModelStore::bestRecognitionModel(langs);
+    QStringList labels;
+    for (const QString &id : ModelStore::recognitionModelsFor(langs))
+        labels << modelLabel(id);
     QString line;
     if (missing.isEmpty()) {
-        line = tr("✓ Installed. Reading %1 with the %2 model.").arg(langText, modelLabel(rec));
+        line = labels.size() > 1 ? tr("✓ Installed. Reading %1 with the %2 models (each line is read with all of them, the best reading wins).")
+                                       .arg(langText, labels.join(QStringLiteral(" + ")))
+                                 : tr("✓ Installed. Reading %1 with the %2 model.").arg(langText, labels.value(0));
     } else {
         qint64 bytes = 0;
         for (const QString &id : missing)
@@ -121,15 +125,8 @@ QString Settings::ocrStatus() const
         line = tr("Not installed for %1 — Download fetches %2 MB. Until then Tesseract is used.")
                    .arg(langText).arg(qMax<qint64>(1, bytes / 1048576));
     }
-    // One recognition model per scan: say which languages it won't cover.
-    if (const ModelSpec *spec = ModelStore::findSpec(rec)) {
-        QStringList uncovered;
-        for (const QString &l : langs)
-            if (!spec->languages.contains(l))
-                uncovered << l;
-        if (!uncovered.isEmpty())
-            line += QLatin1Char(' ') + tr("Note: %1 needs a different model; put the language you scan most first.").arg(uncovered.join(QStringLiteral(", ")));
-    }
+    if (labels.size() > 1)
+        line += QLatin1Char(' ') + tr("More scripts make reading a little slower.");
     if (!m_ocrProgress.isEmpty())
         line += QLatin1Char(' ') + m_ocrProgress;  // last error
     return line;

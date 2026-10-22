@@ -95,6 +95,11 @@ bool App::init(QString *error)
     m_settings = std::make_unique<Settings>(*m_config, *m_ocr);
     m_settings->setEngine(m_engine.get());
     connect(m_launcher.get(), &Launcher::settingsRequested, m_settings.get(), &Settings::show);
+    connect(m_settings.get(), &Settings::signInRequested, this, [this](const QUrl &url) {
+        // Signing in only makes sense with a profile that keeps cookies.
+        QScreen *screen = QGuiApplication::screenAt(QCursor::pos());
+        m_web->open(url, tr("Sign in"), screen ? screen->geometry().center() : QPoint(), true);
+    });
     if (!qEnvironmentVariableIsSet("SELSEARCH_NO_WELCOME"))
         QTimer::singleShot(500, m_settings.get(), &Settings::showWelcomeIfFirstRun);
 
@@ -102,8 +107,11 @@ bool App::init(QString *error)
         if (text == QLatin1String("selsearch:image-search")) {
             ImageSearch::start(image, m_config->string(QStringLiteral("search.image_engine")), this,
                                [this](const QUrl &url, const QString &error) {
+                                   // search.image_open_in: image search can go to the
+                                   // browser (signed in, fewer CAPTCHAs) while text
+                                   // searches stay in the private panel.
                                    if (url.isValid())
-                                       openUrl(url, tr("Image search"));
+                                       openUrlIn(url, tr("Image search"), m_config->string(QStringLiteral("search.image_open_in")));
                                    else
                                        qCWarning(lcApp) << "image search failed:" << error;
                                });
@@ -197,7 +205,7 @@ void App::onShortcut(const QString &id)
     m_lens->start(mode);
 }
 
-void App::openUrl(const QUrl &url, const QString &title)
+void App::openUrlIn(const QUrl &url, const QString &title, const QString &openIn)
 {
     QUrl target = url;
     QString pageTitle = title;
@@ -208,7 +216,8 @@ void App::openUrl(const QUrl &url, const QString &title)
     }
     const bool web = target.scheme() == QLatin1String("https") || target.scheme() == QLatin1String("http")
         || (target.isLocalFile() && target.path().endsWith(QLatin1String(".html")) && target.path().contains(QLatin1String("/selsearch/")));
-    if (web && m_config->string(QStringLiteral("search.open_in")) == QLatin1String("panel") && WebPanel::isAvailable()) {
+    const QString where_ = openIn.isEmpty() ? m_config->string(QStringLiteral("search.open_in")) : openIn;
+    if (web && where_ == QLatin1String("panel") && WebPanel::isAvailable()) {
         QScreen *screen = QGuiApplication::screenAt(QCursor::pos());
         const QPoint where = screen ? screen->geometry().center() : QPoint();
         m_web->open(target, pageTitle, where, m_config->boolean(QStringLiteral("search.persist_cookies")));

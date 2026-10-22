@@ -330,8 +330,17 @@ ApplicationWindow {
                 subtitle: qsTr("Sends every keystroke typed in the launcher to the search engine. Off by default.") }
             ChoiceRow { title: qsTr("Open results"); key: "search.open_in"
                 options: [{ id: "panel", name: qsTr("In a panel") }, { id: "browser", name: qsTr("In your browser") }] }
+            ChoiceRow { title: qsTr("Open image search"); key: "search.image_open_in"
+                subtitle: qsTr("Google often asks a fresh, signed-out browser to solve a CAPTCHA. Your own browser, where you're signed in, rarely gets one.")
+                options: [{ id: "", name: qsTr("Like other results") }, { id: "browser", name: qsTr("In your browser") }, { id: "panel", name: qsTr("In the panel") }] }
             SwitchRow { title: qsTr("Keep cookies in the panel"); key: "search.persist_cookies"
-                subtitle: qsTr("Stay signed in to your search engine (e.g. Kagi). Off = every panel session starts fresh.") }
+                subtitle: qsTr("Stay signed in to your search engine (e.g. Kagi or Google), and a solved CAPTCHA stays solved. Off = every panel session starts fresh.") }
+            SettingRow {
+                visible: !!win.val("search.persist_cookies")
+                title: qsTr("Sign in to Google in the panel")
+                subtitle: qsTr("Signed-in searches get far fewer CAPTCHAs. Google may refuse sign-in in embedded browsers; then use \"In your browser\" above.")
+                Button { text: qsTr("Sign in…"); onClicked: win.settings.signIn("https://accounts.google.com/ServiceLogin?continue=https://lens.google.com/") }
+            }
         }
     }
 
@@ -582,19 +591,26 @@ ApplicationWindow {
         property string subtitle
         default property alias control: holder.data
         width: parent ? parent.width : 400
-        height: Math.max(56, textCol.implicitHeight + 24)
+        // Control beside the text when the text keeps at least 240 px;
+        // otherwise (narrow or tiled window, wide control) below it.
+        readonly property bool stacked: width - holder.width - 20 < 240
+        height: stacked ? textCol.implicitHeight + holder.height + 34
+                        : Math.max(56, textCol.implicitHeight + 24, holder.height + 20)
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: win.line }
         Column {
             id: textCol
-            anchors { left: parent.left; right: holder.left; rightMargin: 20; verticalCenter: parent.verticalCenter }
+            x: 0
+            y: sr.stacked ? 12 : (sr.height - implicitHeight) / 2
+            width: sr.stacked ? sr.width : sr.width - holder.width - 20
             spacing: 3
             Text { width: parent.width; text: sr.title; color: win.fg; font.pixelSize: 14; wrapMode: Text.Wrap }
             Text { width: parent.width; visible: sr.subtitle.length > 0; text: sr.subtitle; color: win.fgDim; font.pixelSize: 12; wrapMode: Text.Wrap }
         }
         Item {
             id: holder
-            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-            width: childrenRect.width
+            x: sr.stacked ? 0 : sr.width - width
+            y: sr.stacked ? textCol.y + textCol.implicitHeight + 10 : (sr.height - height) / 2
+            width: Math.min(childrenRect.width, sr.width)
             height: childrenRect.height
         }
     }
