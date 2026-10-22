@@ -204,7 +204,7 @@ qt_add_qml_module(selsearchd
     NO_RESOURCE_TARGET_PATH)
 qt_add_shaders(selsearchd "selsearch_shaders"
     PREFIX "/"
-    FILES shaders/glass.frag)
+    FILES shaders/glass.frag shaders/dotcells.frag)
 
 # ---------------------------------------------------------------------------
 # selsearch: tiny client used from compositor keybinds. No Qt, starts fast.
