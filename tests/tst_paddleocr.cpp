@@ -302,6 +302,38 @@ private Q_SLOTS:
         QCOMPARE(ModelStore::bestRecognitionModel(langs), model);
     }
 
+    void modelSet_data()
+    {
+        QTest::addColumn<QStringList>("langs");
+        QTest::addColumn<QStringList>("models");
+        const QString def = QStringLiteral("PP-OCRv5_mobile_rec"), eslav = QStringLiteral("eslav_PP-OCRv5_mobile_rec");
+        QTest::newRow("en") << QStringList{QStringLiteral("en")} << QStringList{def};
+        QTest::newRow("ru+en") << QStringList{QStringLiteral("ru"), QStringLiteral("en")} << QStringList{eslav};
+        QTest::newRow("ja+ru") << QStringList{QStringLiteral("ja"), QStringLiteral("ru")} << QStringList{def, eslav};
+        QTest::newRow("ru+ja+en") << QStringList{QStringLiteral("ru"), QStringLiteral("ja"), QStringLiteral("en")} << QStringList{eslav, def};
+        QTest::newRow("ru+uk") << QStringList{QStringLiteral("ru"), QStringLiteral("uk")} << QStringList{eslav};
+        QTest::newRow("ru+bg") << QStringList{QStringLiteral("ru"), QStringLiteral("bg")} << QStringList{QStringLiteral("cyrillic_PP-OCRv5_mobile_rec")};
+        QTest::newRow("de+ru") << QStringList{QStringLiteral("de"), QStringLiteral("ru")} << QStringList{QStringLiteral("latin_PP-OCRv5_mobile_rec"), eslav};
+        QTest::newRow("zh+ja") << QStringList{QStringLiteral("zh"), QStringLiteral("ja")} << QStringList{def};
+        QTest::newRow("unknown") << QStringList{QStringLiteral("xx")} << QStringList{def};
+    }
+
+    void modelSet()
+    {
+        QFETCH(QStringList, langs);
+        QFETCH(QStringList, models);
+        QCOMPARE(ModelStore::recognitionModelsFor(langs), models);
+    }
+
+    void modelSetAmongPresent()
+    {
+        // ja's model is missing: ru still gets its model, ja is skipped.
+        const QStringList present{QStringLiteral("eslav_PP-OCRv5_mobile_rec")};
+        QCOMPARE(ModelStore::recognitionModelsFor({QStringLiteral("ja"), QStringLiteral("ru")}, present), present);
+        // Nothing requested has a present model: fall back to the best present one.
+        QCOMPARE(ModelStore::recognitionModelsFor({QStringLiteral("ko")}, present), present);
+    }
+
     void languageChoiceAmongPresent()
     {
         const QStringList present{QStringLiteral("PP-OCRv5_mobile_rec"), QStringLiteral("cyrillic_PP-OCRv5_mobile_rec")};

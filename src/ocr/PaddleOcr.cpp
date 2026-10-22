@@ -353,6 +353,14 @@ bool isCjk(char32_t c)
 }
 
 class PaddleOcrEngine final : public OcrEngine {
+    // One recognizer per script the user reads (ModelStore::recognitionModelsFor).
+    struct RecModel {
+        QString id;
+        std::unique_ptr<Ort::Session> session;
+        std::string in, out;
+        QStringList dict;
+    };
+
 public:
     explicit PaddleOcrEngine(const QString &modelDir)
         : m_dir(modelDir)
@@ -401,10 +409,7 @@ public:
     void unload() override
     {
         m_det.reset();
-        m_rec.reset();
-        m_recId.clear();
-        m_dict.clear();
-        m_dict.squeeze();
+        m_recs.clear();
     }
 
     OcrResult recognize(const QImage &input, const QStringList &languages) override
@@ -427,7 +432,7 @@ public:
             sortReadingOrder(result.lines);
             if (m_debug)
                 qInfo("ppocr: %s load=%lldms det=%lldms (%d boxes) rec=%lldms (%lld input columns in %d batches)",
-                      qPrintable(m_recId), tLoad, tDet, int(boxes.size()), tRec, m_statColumns, m_statBatches);
+                      qPrintable(recIds()), tLoad, tDet, int(boxes.size()), tRec, m_statColumns, m_statBatches);
         } catch (const Ort::Exception &e) {
             result.lines.clear();
             result.error = QStringLiteral("onnxruntime: %1").arg(QString::fromUtf8(e.what()));
@@ -470,44 +475,51 @@ private:
             error = QStringLiteral("PP-OCR detection model missing in %1").arg(m_dir);
             return false;
         }
-        // Use the best *present* recognizer for the request; never download.
+        // The recognizers for the request among the *present* ones; never download.
         const QStringList present = ModelStore::presentRecognitionModels(m_dir);
-        const QString recId = present.contains(m_recOverride) ? m_recOverride
-                                                              : ModelStore::bestRecognitionModel(languages, present);
-        if (recId.isEmpty()) {
+        const QStringList wanted = present.contains(m_recOverride) ? QStringList{m_recOverride}
+                                                                   : ModelStore::recognitionModelsFor(languages, present);
+        if (wanted.isEmpty()) {
             error = QStringLiteral("no PP-OCR recognition model in %1").arg(m_dir);
             return false;
         }
         if (!m_det)
             m_det = createSession(m_dir + QLatin1Char('/') + det->onnxFile(), threadCount());
-        if (!m_rec || m_recId != recId) {
-            m_rec.reset();
-            const QString path = m_dir + QLatin1Char('/') + ModelStore::findSpec(recId)->onnxFile();
+        // Keep loaded models that are still wanted, in the wanted order.
+        std::vector<RecModel> recs;
+        for (const QString &id : wanted) {
+            auto it = std::find_if(m_recs.begin(), m_recs.end(), [&](const RecModel &r) { return r.id == id; });
+            if (it != m_recs.end()) {
+                recs.push_back(std::move(*it));
+                continue;
+            }
+            RecModel r;
+            r.id = id;
+            const QString path = m_dir + QLatin1Char('/') + ModelStore::findSpec(id)->onnxFile();
             // Recognition parallelises across batches instead of inside one:
             // m_recWorkers threads each run a batch with a single intra-op
             // thread. Same thread budget, ~1.3x faster than intra-op
             // parallelism on the narrow 48 px tensors.
-            m_rec = createSession(path, m_recWorkers > 1 ? 1 : threadCount());
+            r.session = createSession(path, m_recWorkers > 1 ? 1 : threadCount());
             Ort::AllocatorWithDefaultOptions alloc;
-            m_recIn = m_rec->GetInputNameAllocated(0, alloc).get();
-            m_recOut = m_rec->GetOutputNameAllocated(0, alloc).get();
-            m_dict = loadDictionary(*m_rec, path);
-            const auto shape = m_rec->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+            r.in = r.session->GetInputNameAllocated(0, alloc).get();
+            r.out = r.session->GetOutputNameAllocated(0, alloc).get();
+            r.dict = loadDictionary(*r.session, path);
+            const auto shape = r.session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
             const qsizetype classes = shape.empty() ? -1 : qsizetype(shape.back());
             // CTC classes: blank + dictionary (+ space when use_space_char).
-            if (classes == m_dict.size() + 2)
-                m_dict << QStringLiteral(" ");
-            else if (classes > 0 && classes != m_dict.size() + 1) {
+            if (classes == r.dict.size() + 2)
+                r.dict << QStringLiteral(" ");
+            else if (classes > 0 && classes != r.dict.size() + 1) {
                 error = QStringLiteral("%1: dictionary has %2 entries but the model outputs %3 classes")
-                            .arg(recId)
-                            .arg(m_dict.size())
+                            .arg(id)
+                            .arg(r.dict.size())
                             .arg(classes);
-                m_rec.reset();
-                m_dict.clear();
                 return false;
             }
-            m_recId = recId;
+            recs.push_back(std::move(r));
         }
+        m_recs = std::move(recs);
         return true;
     }
 
@@ -643,7 +655,10 @@ private:
 
         // Widest batches first so the workers finish together.
         std::reverse(batches.begin(), batches.end());
-        std::vector<QList<OcrLine>> results(batches.size());
+        // Best reading per crop over all recognizers (each crop is in exactly
+        // one batch, so workers never write the same slot).
+        std::vector<std::optional<OcrLine>> best(crops.size());
+        std::vector<float> bestScore(crops.size(), -1.0f);
         std::atomic<size_t> next{0};
         std::mutex errorMutex;
         std::exception_ptr error;
@@ -657,7 +672,16 @@ private:
                 if (b >= batches.size())
                     return;
                 try {
-                    results[b] = runRecBatch(crops, batches[b], boxes);
+                    for (size_t m = 0; m < m_recs.size(); ++m) {
+                        // A later model must beat the earlier one (the user's
+                        // first language) clearly, not by noise.
+                        const float margin = m == 0 ? 0.0f : 0.02f;
+                        for (auto &[k, scored] : runRecBatch(m_recs[m], crops, batches[b], boxes))
+                            if (scored.second > bestScore[k] + margin) {
+                                bestScore[k] = scored.second;
+                                best[k] = std::move(scored.first);
+                            }
+                    }
                 } catch (...) {
                     std::lock_guard lock(errorMutex);
                     if (!error)
@@ -684,15 +708,18 @@ private:
         if (error)
             std::rethrow_exception(error);
         QList<OcrLine> lines;
-        for (auto &r : results)
-            lines << r;
+        for (auto &l : best)
+            if (l)
+                lines << std::move(*l);
         return lines;
     }
 
-    QList<OcrLine> runRecBatch(const std::vector<Crop> &crops, const std::vector<int> &batch,
-                               const QList<TextBox> &boxes) const
+    // (crop index, (line, mean character confidence)) for every crop read.
+    std::vector<std::pair<int, std::pair<OcrLine, float>>> runRecBatch(const RecModel &model, const std::vector<Crop> &crops,
+                                                                       const std::vector<int> &batch,
+                                                                       const QList<TextBox> &boxes) const
     {
-        QList<OcrLine> lines;
+        std::vector<std::pair<int, std::pair<OcrLine, float>>> lines;
         int maxW = kRecMinWidth;
         for (int k : batch)
             maxW = std::max(maxW, crops[k].width);
@@ -717,8 +744,8 @@ private:
         const Ort::MemoryInfo mem = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
         Ort::Value tensor =
             Ort::Value::CreateTensor<float>(mem, input.data(), input.size(), shape.data(), shape.size());
-        const char *inName = m_recIn.c_str(), *outName = m_recOut.c_str();
-        auto outputs = m_rec->Run(runOptions(), &inName, &tensor, 1, &outName, 1);
+        const char *inName = model.in.c_str(), *outName = model.out.c_str();
+        auto outputs = model.session->Run(runOptions(), &inName, &tensor, 1, &outName, 1);
         input.clear();
         input.shrink_to_fit();
 
@@ -728,15 +755,16 @@ private:
         for (int bi = 0; bi < n; ++bi) {
             const Crop &c = crops[batch[bi]];
             const int usedT = std::min(T, (c.width + kRecStride - 1) / kRecStride);
-            const std::vector<DecodedChar> chars = ctcDecode(data + size_t(bi) * T * C, usedT, C);
-            std::optional<OcrLine> line = buildLine(chars, c, boxes[c.boxIndex]);
+            const std::vector<DecodedChar> chars = ctcDecode(model.dict, data + size_t(bi) * T * C, usedT, C);
+            float score = 0;
+            std::optional<OcrLine> line = buildLine(chars, c, boxes[c.boxIndex], &score);
             if (line)
-                lines << *line;
+                lines.push_back({batch[bi], {std::move(*line), score}});
         }
         return lines;
     }
 
-    std::vector<DecodedChar> ctcDecode(const float *probs, int T, int C) const
+    static std::vector<DecodedChar> ctcDecode(const QStringList &dict, const float *probs, int T, int C)
     {
         std::vector<DecodedChar> out;
         int prev = 0;
@@ -746,9 +774,9 @@ private:
             if (idx != 0 && idx == prev && !out.empty()) {
                 out.back().lastT = t;
                 out.back().prob = std::max(out.back().prob, row[idx]);
-            } else if (idx != 0 && idx - 1 < m_dict.size()) {
+            } else if (idx != 0 && idx - 1 < dict.size()) {
                 DecodedChar ch;
-                ch.text = m_dict[idx - 1];
+                ch.text = dict[idx - 1];
                 ch.firstT = ch.lastT = t;
                 ch.prob = row[idx];
                 ch.space = ch.text.trimmed().isEmpty();
@@ -759,7 +787,8 @@ private:
         return out;
     }
 
-    std::optional<OcrLine> buildLine(const std::vector<DecodedChar> &chars, const Crop &crop, const TextBox &box) const
+    std::optional<OcrLine> buildLine(const std::vector<DecodedChar> &chars, const Crop &crop, const TextBox &box,
+                                     float *score) const
     {
         if (chars.empty())
             return std::nullopt;
@@ -772,6 +801,7 @@ private:
             }
         if (nonSpace == 0 || probSum / nonSpace < kDropScore)
             return std::nullopt;
+        *score = probSum / nonSpace;
 
         // Ink profile of the crop: contrast against the background luminance
         // (median of the top and bottom rows, which the unclipped box leaves as
@@ -918,12 +948,16 @@ private:
     int m_statBatches = 0;
     QString m_recOverride;
     std::unique_ptr<Ort::Session> m_det;
-    std::unique_ptr<Ort::Session> m_rec;
-    QString m_recId;
-    std::string m_recIn, m_recOut;
+    std::vector<RecModel> m_recs;
+    QString recIds() const
+    {
+        QStringList ids;
+        for (const auto &r : m_recs)
+            ids << r.id;
+        return ids.join(QLatin1Char('+'));
+    }
     int m_recWorkers = threadCount();
     bool m_debug = false;
-    QStringList m_dict;
 };
 
 }  // namespace

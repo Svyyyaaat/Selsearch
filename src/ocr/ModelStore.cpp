@@ -180,6 +180,56 @@ QString rank(const QList<ModelSpec> &specs, const QStringList &languagesIn, cons
     return best;
 }
 
+QStringList normalizedLanguages(const QStringList &languagesIn)
+{
+    QStringList languages;
+    for (const QString &l : languagesIn) {
+        const QString code = l.section(QLatin1Char('_'), 0, 0).section(QLatin1Char('-'), 0, 0).toLower();
+        if (!code.isEmpty() && !languages.contains(code))
+            languages << code;
+    }
+    return languages;
+}
+
+// Greedy cover in the user's order: for each requested non-English language
+// not yet covered, add the best model (by rank()) among those that read it,
+// judged against the languages still uncovered from there on.
+QStringList cover(const QList<ModelSpec> &specs, const QStringList &languagesIn, const QStringList &candidates)
+{
+    const QStringList languages = normalizedLanguages(languagesIn);
+    const QString en = QStringLiteral("en");
+    QStringList chosen;
+    auto covered = [&](const QString &lang) {
+        for (const QString &id : std::as_const(chosen))
+            if (const ModelSpec *s = findIn(specs, id); s && s->languages.contains(lang))
+                return true;
+        return false;
+    };
+    for (int i = 0; i < languages.size() && chosen.size() < ModelStore::kMaxRecognitionModels; ++i) {
+        const QString &lang = languages[i];
+        if (lang == en || covered(lang))
+            continue;
+        QStringList readers;
+        for (const ModelSpec &s : specs)
+            if (s.kind == ModelSpec::Recognition && s.languages.contains(lang)
+                && (candidates.isEmpty() || candidates.contains(s.id)))
+                readers << s.id;
+        if (readers.isEmpty())
+            continue;  // unknown language, or its model is not present
+        QStringList rest;
+        for (int j = i; j < languages.size(); ++j)
+            if (!covered(languages[j]))
+                rest << languages[j];
+        chosen << rank(specs, rest, readers);
+    }
+    if (chosen.isEmpty()) {
+        const QString fallback = rank(specs, languages, candidates);
+        if (!fallback.isEmpty())
+            chosen << fallback;
+    }
+    return chosen;
+}
+
 }  // namespace
 
 struct ModelStore::Job {
@@ -208,6 +258,11 @@ const ModelSpec *ModelStore::findSpec(const QString &id)
 QString ModelStore::bestRecognitionModel(const QStringList &languages, const QStringList &candidates)
 {
     return rank(defaultSpecs(), languages, candidates);
+}
+
+QStringList ModelStore::recognitionModelsFor(const QStringList &languages, const QStringList &candidates)
+{
+    return cover(defaultSpecs(), languages, candidates);
 }
 
 bool ModelStore::isPresent(const QString &dir, const ModelSpec &spec)
@@ -259,9 +314,7 @@ QStringList ModelStore::requiredFor(const QStringList &languages) const
             ids << s.id;
             break;
         }
-    const QString recId = rank(m_specs, languages, {});
-    if (!recId.isEmpty())
-        ids << recId;
+    ids << cover(m_specs, languages, {});
     return ids;
 }
 
