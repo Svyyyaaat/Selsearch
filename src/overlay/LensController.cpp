@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "LensController.h"
+#include "PerfProbe.h"
 
 #include "FrameStore.h"
 #include "app/WindowPlacement.h"
@@ -205,6 +206,8 @@ void LensController::createWindow(LensScreen *s)
     }
     setupLensWindow(window, s->screen());
     s->window = window;
+    if (PerfProbe::enabled())
+        new PerfProbe(window, s->name(), window);
 }
 
 void LensController::start(const QString &mode)
