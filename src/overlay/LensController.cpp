@@ -307,6 +307,7 @@ void LensController::start(const QString &mode)
             }
         }
         setActiveScreen(focusedScreen);
+        setPointerScreen({});
         m_active = true;
         Q_EMIT activeChanged();
         showWindows();

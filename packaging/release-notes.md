@@ -4,7 +4,7 @@ Selsearch: freeze the screen, select text or part of an image, then copy, transl
 
 | | File |
 |---|---|
-| Fedora 43, x86_64 | `selsearch-*.fc43.x86_64.rpm` |
+| Fedora 43 / 44 / 45, x86_64 | `selsearch-*.fc43.x86_64.rpm` / `.fc44.` / `.fc45.` (pick your release: `rpm -E %fedora`) |
 | Windows 10/11, x64 (installer) | `Selsearch-*-windows-x64-setup.exe` |
 | Windows 10/11, x64 (portable) | `Selsearch-windows-x64.zip` |
 | Arch | build `packaging/arch/PKGBUILD` with `makepkg -si` |
@@ -13,7 +13,7 @@ Selsearch: freeze the screen, select text or part of an image, then copy, transl
 **Fedora:**
 
 ```sh
-sudo dnf install ./selsearch-*.fc43.x86_64.rpm
+sudo dnf install ./selsearch-*.fc$(rpm -E %fedora).x86_64.rpm
 systemctl --user enable --now selsearch.service
 selsearch config
 ```

@@ -102,6 +102,12 @@ class LensController : public QObject {
     Q_PROPERTY(QString translateTarget READ translateTarget NOTIFY settingsChanged)
     Q_PROPERTY(QString activeScreen READ activeScreen WRITE setActiveScreen NOTIFY activeScreenChanged)
     Q_PROPERTY(bool ocrSelectionOnly READ ocrSelectionOnly NOTIFY settingsChanged)
+    // Screen whose overlay the pointer is over ("" until the pointer moved).
+    // Only that overlay runs the ambient animation: an animating overlay on
+    // another monitor makes the GUI thread wait for its render thread every
+    // frame, which delays pointer handling (measured: 30-50 ms stalls with
+    // two animating screens vs ~5 ms with one).
+    Q_PROPERTY(QString pointerScreen READ pointerScreen WRITE setPointerScreen NOTIFY pointerScreenChanged)
     Q_PROPERTY(qreal dotBrightness READ dotBrightness NOTIFY settingsChanged)
 public:
     LensController(Config &config, OcrService &ocr, QObject *parent = nullptr);
@@ -126,6 +132,14 @@ public:
     QString imageEngineName() const;
     QString translateTarget() const;
     QString activeScreen() const { return m_activeScreen; }
+    QString pointerScreen() const { return m_pointerScreen; }
+    void setPointerScreen(const QString &name)
+    {
+        if (name == m_pointerScreen)
+            return;
+        m_pointerScreen = name;
+        Q_EMIT pointerScreenChanged();
+    }
     void setActiveScreen(const QString &name);
 
     // Starts a session: capture, then show one overlay per screen.
@@ -158,6 +172,7 @@ Q_SIGNALS:
     void activeChanged();
     void settingsChanged();
     void activeScreenChanged();
+    void pointerScreenChanged();
     void notify(const QString &message);   // snackbar text on the active overlay
     void keyForwarded(int key, int modifiers);
     void openUrl(const QUrl &url);         // handled by the app (panel or browser)
@@ -187,6 +202,7 @@ private:
     bool m_starting = false;
     QString m_mode;
     QString m_activeScreen;
+    QString m_pointerScreen;
     int m_generation = 0;
     std::shared_ptr<std::atomic_bool> m_ocrCancel;
     QString m_lastTranslateText;

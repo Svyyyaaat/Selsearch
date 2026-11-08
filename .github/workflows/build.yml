@@ -163,7 +163,11 @@ jobs:
   fedora:
     if: ${{ !inputs.notes_only }}
     runs-on: ubuntu-24.04
-    container: fedora:43
+    strategy:
+      fail-fast: false
+      matrix:
+        release: [43, 44, 45]   # each RPM links that release's Qt/ICU/onnxruntime
+    container: fedora:${{ matrix.release }}
     steps:
       - name: git
         run: dnf -y -q install git-core
@@ -177,7 +181,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4.6.2
         with:
-          name: Selsearch-fedora-x86_64
+          name: Selsearch-fedora${{ matrix.release }}-x86_64
           path: dist/*.rpm
 
   release:

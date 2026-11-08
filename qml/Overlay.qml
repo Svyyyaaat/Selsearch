@@ -346,12 +346,17 @@ Window {
     // Clock for the dot shimmer / edge glow, stepped at ~30 fps: the glow is
     // ambient, and redrawing full-screen overlays at 144 Hz+ on every monitor
     // would keep a core busy. Interactions still render at full rate.
+    // Only the overlay under the pointer animates (until the pointer first
+    // moves: the screen the lens opened on). See LensController::pointerScreen.
+    readonly property bool animating: win.lens.pointerScreen === "" ? win.lensScreen.focused
+                                                                     : win.lens.pointerScreen === win.lensScreen.name
     Timer {
         interval: 33
         repeat: true
-        running: win.visible && win.themeName !== "mono"
+        running: win.visible && win.themeName !== "mono" && win.animating
         property real started: 0
-        onRunningChanged: if (running) started = Date.now()
+        // Continue from the current time instead of jumping back to 0.
+        onRunningChanged: if (running) started = Date.now() - win.time * 1000
         onTriggered: win.time = (Date.now() - started) / 1000
     }
 
@@ -371,55 +376,15 @@ Window {
         }
 
         // ---- backdrop -----------------------------------------------------------
-        // Two passes: `cellField` computes one intensity per dot cell into a
-        // texture of (cols x rows) texels; `backdrop` draws the frame, the dots
-        // and the selection rim per pixel from it. The backdrop is cached in a
-        // layer, so frames where only the hover pill, a word highlight or the
-        // toolbar change (every mouse move) just composite the cached texture
-        // instead of re-running the shaders over the whole screen.
-        readonly property real dotSpacing: 9
-        readonly property bool dotsOn: win.themeName !== "mono"
-        readonly property int cols: Math.ceil(width / dotSpacing)
-        readonly property int rows: Math.ceil(height / dotSpacing)
-
-        ShaderEffect {
-            id: cellField
-            visible: false
-            width: scene.cols * scene.dotSpacing
-            height: scene.rows * scene.dotSpacing
-            property vector4d sel: backdrop.sel
-            property vector2d size: backdrop.size
-            property vector2d cellCount: backdrop.cellCount
-            property real radius: backdrop.radius
-            property real hasSel: backdrop.hasSel
-            property real focusAmt: win.focusAmt
-            property real wave: win.wave
-            property real pulse: win.pulse
-            property real time: win.time
-            property real dots: backdrop.dots
-            property real spacing: scene.dotSpacing
-            property real boost: win.lens.dotBrightness
-            fragmentShader: "qrc:/shaders/dotcells.frag.qsb"
-        }
-        ShaderEffectSource {
-            id: cellTexture
-            visible: false
-            sourceItem: scene.dotsOn ? cellField : null
-            textureSize: Qt.size(scene.cols, scene.rows)
-            smooth: false   // nearest: one texel is one dot
-            hideSource: true
-        }
-
+        // One shader pass (glass.frag), cheap away from the screen edges and
+        // the selection. Deliberately not cached in a layer: a layer made Qt
+        // draw two frames per animation tick (60 fps instead of 30).
         ShaderEffect {
             id: backdrop
             anchors.fill: parent
-            layer.enabled: true
-            layer.smooth: false
             property variant source: frame
-            property variant cells: scene.dotsOn ? cellTexture : frame
             property vector4d sel: Qt.vector4d(win.sel.x, win.sel.y, win.sel.width, win.sel.height)
             property vector2d size: Qt.vector2d(width, height)
-            property vector2d cellCount: Qt.vector2d(scene.cols, scene.rows)
             property real radius: win.isTextSel ? 0 : win.selRadius
             property real hasSel: win.hasSel && !win.isTextSel ? 1 : 0
             property real focusAmt: win.focusAmt
@@ -428,8 +393,10 @@ Window {
             property real rimAlpha: win.phase === "drawing" ? 0.75 : 0.95
             property real rimWidth: win.themeName === "aurora" ? 2.0 : 1.5
             property real wave: win.wave
-            property real dots: scene.dotsOn ? (win.isTextSel ? 0.25 : 1) : 0
-            property real spacing: scene.dotSpacing
+            property real pulse: win.pulse
+            property real time: win.time
+            property real dots: win.themeName === "mono" ? 0 : (win.isTextSel ? 0.25 : 1)
+            property real spacing: 9
             property real tintMix: win.themeName === "aurora" ? 0.14 : 0
             property real boost: win.lens.dotBrightness
             property color rimColor: win.rimA
@@ -633,6 +600,7 @@ Window {
                 win.hoverWindow = win.phase === "idle" ? win.windowAt(x, y) : null
             }
 
+            onContainsMouseChanged: if (containsMouse) win.lens.pointerScreen = win.lensScreen.name
             onPositionChanged: (mouse) => {
                 if (!pressed) { updateHover(mouse.x, mouse.y); return }
                 const p = Qt.point(mouse.x, mouse.y)

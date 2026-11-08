@@ -21,14 +21,20 @@ can't sit above everything there.
 
 ### Fedora
 
-**Ready-made package (Fedora 43):** download `selsearch-*.fc43.x86_64.rpm`
-from the [latest release](https://github.com/svyyyaaat/selsearch/releases), then
+**Ready-made package (Fedora 43, 44, 45):** download the RPM for your
+release (`rpm -E %fedora` prints it) from the
+[latest release](https://github.com/svyyyaaat/selsearch/releases), e.g.
+`selsearch-*.fc45.x86_64.rpm`, then
 
 ```sh
-sudo dnf install ./selsearch-*.fc43.x86_64.rpm
+sudo dnf install ./selsearch-*.fc$(rpm -E %fedora).x86_64.rpm
 systemctl --user enable --now selsearch.service
 selsearch config
 ```
+
+After a Fedora upgrade, install the RPM built for the new release: each one
+links that release's Qt and ONNX Runtime. Updating: install the newer RPM the
+same way, then `selsearch quit; systemctl --user restart selsearch.service`.
 
 **From source** (Fedora 41 or newer, Qt 6.8+):
 
@@ -205,4 +211,7 @@ rm -r ~/.config/selsearch ~/.local/share/selsearch ~/.local/state/selsearch   # 
   the same Qt as Selsearch.
 - **Text isn't selectable.** Check *Settings → Text recognition*. The status
   line says which engine and model are used and what's missing.
+- **The lens feels laggy.** Run `selsearch quit; SELSEARCH_PERF=1 selsearchd`,
+  open the lens, move the pointer around for ~10 seconds, close it, and send
+  the `selsearch.perf` lines (frame rate, render time, UI stalls per screen).
 - **Logs.** `journalctl --user -u selsearch -f`, or run `QT_LOGGING_RULES="selsearch.*=true" selsearchd`.
