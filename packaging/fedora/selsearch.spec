@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Built by .github/workflows/build.yml from `git archive` of the tagged commit:
 #   rpmbuild -ba --define "_sourcedir $PWD" --define "version_override 0.1.0" selsearch.spec
-%{!?version_override: %global version_override 0.1.7}
+%{!?version_override: %global version_override 0.1.8}
 
 Name:           selsearch
 Version:        %{version_override}
@@ -71,6 +71,8 @@ install -Dm644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 %{_datadir}/applications/selsearch.desktop
 
 %changelog
+* Mon Nov 09 2026 Svyyyaaat - 0.1.8-1
+- The daemon restarts itself into an updated binary once idle
 * Mon Nov 09 2026 Svyyyaaat - 0.1.7-1
 - Noctalia 5: accent from its theme template outputs
 * Mon Nov 09 2026 Svyyyaaat - 0.1.6-1
