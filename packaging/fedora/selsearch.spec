@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Built by .github/workflows/build.yml from `git archive` of the tagged commit:
 #   rpmbuild -ba --define "_sourcedir $PWD" --define "version_override 0.1.0" selsearch.spec
-%{!?version_override: %global version_override 0.1.5}
+%{!?version_override: %global version_override 0.1.6}
 
 Name:           selsearch
 Version:        %{version_override}
@@ -71,6 +71,10 @@ install -Dm644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 %{_datadir}/applications/selsearch.desktop
 
 %changelog
+* Mon Nov 09 2026 Svyyyaaat - 0.1.6-1
+- Accent follows Noctalia/pywal file rewrites reliably
+- Setting for the text-ready flash (off/subtle/strong, default subtle)
+- Interface font setting
 * Mon Nov 09 2026 Svyyyaaat - 0.1.5-1
 - Accent colour from pywal, Noctalia or any colour file, updated live
 * Sun Nov 08 2026 Svyyyaaat - 0.1.4-1
