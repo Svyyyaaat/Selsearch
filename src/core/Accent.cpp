@@ -6,7 +6,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonDocument>
+#include <QLoggingCategory>
 #include <QJsonObject>
 #include <QRegularExpression>
 
@@ -21,6 +23,8 @@
 #endif
 
 #include <optional>
+
+Q_LOGGING_CATEGORY(lcAccent, "selsearch.accent")
 
 namespace selsearch {
 
@@ -201,8 +205,22 @@ std::optional<QColor> accentFromSource(const Config &config)
     const QString s = accentSource(config);
     if (s == QLatin1String("portal"))
         return portalAccent();
-    if (s == QLatin1String("pywal") || s == QLatin1String("noctalia") || s == QLatin1String("file"))
-        return readAccentFile(s, accentSourcePath(config));
+    if (s == QLatin1String("pywal") || s == QLatin1String("noctalia") || s == QLatin1String("file")) {
+        // Theme tools rewrite these files in place (truncate, then write) or
+        // via unlink + create; a read in between finds nothing usable. Keep
+        // the last colour read from the same file instead of flashing the
+        // fallback colour.
+        static QHash<QString, QColor> lastGood;
+        const QString path = accentSourcePath(config);
+        if (auto c = readAccentFile(s, path)) {
+            lastGood.insert(s + QLatin1Char('|') + path, *c);
+            return c;
+        }
+        const QColor last = lastGood.value(s + QLatin1Char('|') + path);
+        if (last.isValid())
+            return last;
+        return std::nullopt;
+    }
     return std::nullopt;
 }
 
@@ -220,23 +238,51 @@ AccentWatcher::AccentWatcher(const Config &config, QObject *parent)
     : QObject(parent)
     , m_config(config)
 {
-    auto check = [this] {
-        rewatch();  // a replaced file has a new inode: watch it again
-        const QColor c = accentColor(m_config);
-        if (c != m_last) {
-            m_last = c;
-            Q_EMIT changed();
-        }
-    };
-    connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, check);
-    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, check);
-    connect(&config, &Config::changed, this, [this, check](const QString &key) {
-        if (key.startsWith(QLatin1String("general.accent")))
+    // File events come in bursts while a tool writes (truncate, write,
+    // close; or unlink, create, rename): read once things settle, and once
+    // more a little later in case the last write raced the first read.
+    m_settle.setSingleShot(true);
+    m_settle.setInterval(150);
+    m_confirm.setSingleShot(true);
+    m_confirm.setInterval(1200);
+    connect(&m_settle, &QTimer::timeout, this, [this] {
+        check();
+        m_confirm.start();
+    });
+    connect(&m_confirm, &QTimer::timeout, this, &AccentWatcher::check);
+    auto soon = [this] { m_settle.start(); };
+    connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, soon);
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, soon);
+    connect(&config, &Config::changed, this, [this](const QString &key) {
+        if (key.startsWith(QLatin1String("general.accent")) || key == QLatin1String("general.follow_portal_accent"))
             check();
     });
-    connect(&config, &Config::reloaded, this, check);
-    rewatch();
-    m_last = accentColor(m_config);
+    connect(&config, &Config::reloaded, this, &AccentWatcher::check);
+    // Safety net for what inotify does not see (a symlinked file whose target
+    // is replaced elsewhere, a recreated directory): compare the file's
+    // modification time every few seconds. One stat() per poll.
+    m_poll.setInterval(3000);
+    connect(&m_poll, &QTimer::timeout, this, [this] {
+        const QFileInfo fi(m_path);
+        const QString stamp = fi.exists() ? QStringLiteral("%1/%2").arg(fi.lastModified().toMSecsSinceEpoch()).arg(fi.size()) : QString();
+        if (stamp != m_stamp)
+            m_settle.start();
+    });
+    check();
+}
+
+void AccentWatcher::check()
+{
+    rewatch();  // a replaced file has a new inode: watch it again
+    const QFileInfo fi(m_path);
+    m_stamp = fi.exists() ? QStringLiteral("%1/%2").arg(fi.lastModified().toMSecsSinceEpoch()).arg(fi.size()) : QString();
+    const QColor c = accentColor(m_config);
+    if (c == m_last)
+        return;
+    m_last = c;
+    qCInfo(lcAccent).noquote() << "accent" << c.name() << "from" << accentSource(m_config)
+                               << (m_path.isEmpty() ? QString() : m_path);
+    Q_EMIT changed();
 }
 
 void AccentWatcher::rewatch()
@@ -247,13 +293,24 @@ void AccentWatcher::rewatch()
     if (!m_watcher.directories().isEmpty())
         m_watcher.removePaths(m_watcher.directories());
     m_path = path;
-    if (path.isEmpty())
+    if (path.isEmpty()) {
+        m_poll.stop();
         return;
-    const QString dir = QFileInfo(path).absolutePath();
-    if (QFileInfo(dir).isDir())
-        m_watcher.addPath(dir);
-    if (QFileInfo::exists(path))
-        m_watcher.addPath(path);
+    }
+    QStringList paths;
+    const QFileInfo fi(path);
+    paths << fi.absolutePath();
+    if (fi.exists())
+        paths << path;
+    // A symlink: watch where it points as well.
+    const QString target = fi.canonicalFilePath();
+    if (!target.isEmpty() && target != fi.absoluteFilePath())
+        paths << target << QFileInfo(target).absolutePath();
+    for (const QString &p : std::as_const(paths))
+        if (QFileInfo::exists(p) && !m_watcher.files().contains(p) && !m_watcher.directories().contains(p))
+            m_watcher.addPath(p);
+    if (!m_poll.isActive())
+        m_poll.start();
 }
 
 }  // namespace selsearch

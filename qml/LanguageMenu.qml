@@ -75,6 +75,7 @@ Popup {
     contentItem: Column {
         spacing: 6
         TextField {
+            font.family: uiFont.family
             id: search
             width: parent.width
             height: 34
@@ -112,6 +113,7 @@ Popup {
                 width: ListView.view.width
                 height: modelData.header ? 28 : 34
                 Text {
+                    font.family: uiFont.family
                     visible: !!row.modelData.header
                     text: row.modelData.header || ""
                     color: Qt.rgba(1, 1, 1, 0.45)
@@ -129,6 +131,7 @@ Popup {
                     HoverHandler { id: hover }
                     TapHandler { onTapped: root.pick(row.index) }
                     Text {
+                        font.family: uiFont.family
                         anchors.left: parent.left; anchors.leftMargin: 10
                         anchors.right: check.left; anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
@@ -148,6 +151,7 @@ Popup {
             }
         }
         Text {
+            font.family: uiFont.family
             visible: root.rows.length === 0
             width: parent.width
             topPadding: 6; bottomPadding: 8

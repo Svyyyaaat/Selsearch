@@ -3,6 +3,7 @@
 
 #include "Launcher.h"
 #include "Settings.h"
+#include "UiFont.h"
 #include "WebPanel.h"
 #include "search/ImageSearch.h"
 #include "search/SearchEngines.h"
@@ -26,6 +27,7 @@
 #include <QImageReader>
 #include <QJsonArray>
 #include <QLoggingCategory>
+#include <QQmlContext>
 #include <QTimer>
 #include <QUrlQuery>
 
@@ -67,6 +69,7 @@ bool App::init(QString *error)
     m_frames = new FrameStore;
     m_engine->addImageProvider(QStringLiteral("frame"), m_frames);
     m_engine->addImageProvider(QStringLiteral("icon"), new IconProvider);
+    m_engine->rootContext()->setContextProperty(QStringLiteral("uiFont"), new UiFont(*m_config, this));
 
     m_lens = std::make_unique<LensController>(*m_config, *m_ocr);
     m_lens->setTranslator(m_translator.get());

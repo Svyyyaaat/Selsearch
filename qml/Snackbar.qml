@@ -21,6 +21,7 @@ Rectangle {
     visible: opacity > 0
 
     Text {
+        font.family: uiFont.family
         id: label
         anchors.centerIn: parent
         color: "#eceef4"

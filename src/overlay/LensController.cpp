@@ -135,6 +135,15 @@ bool LensController::recognizeText() const { return m_config.boolean(QStringLite
 bool LensController::snapToWindows() const { return m_config.boolean(QStringLiteral("lens.snap_to_windows")); }
 bool LensController::ocrSelectionOnly() const { return m_config.boolean(QStringLiteral("ocr.selection_only")); }
 qreal LensController::dotBrightness() const { return std::clamp(m_config.number(QStringLiteral("lens.dot_brightness")), 0.25, 4.0); }
+qreal LensController::textReadyFlash() const
+{
+    const QString v = m_config.string(QStringLiteral("lens.text_ready_flash"));
+    if (v == QLatin1String("off"))
+        return 0.0;
+    if (v == QLatin1String("strong"))
+        return 1.3;  // the original flash
+    return 0.45;
+}
 bool LensController::showHints() const { return m_config.boolean(QStringLiteral("lens.show_hints")); }
 bool LensController::aiEnabled() const { return m_config.boolean(QStringLiteral("ai.enabled")); }
 QString LensController::onSelect() const { return m_config.string(QStringLiteral("lens.on_select")); }

@@ -123,6 +123,7 @@ Item {
             anchors.centerIn: parent
             spacing: 2
             Text {
+                font.family: uiFont.family
                 id: langText
                 anchors.verticalCenter: parent.verticalCenter
                 text: parent.parent.lang.toUpperCase()

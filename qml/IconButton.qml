@@ -41,6 +41,7 @@ AbstractButton {
                 }
             }
             Text {
+                font.family: uiFont.family
                 visible: root.text.length > 0
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.text

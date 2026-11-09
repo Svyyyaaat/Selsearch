@@ -4,6 +4,7 @@
 #include <QColor>
 #include <QFileSystemWatcher>
 #include <QObject>
+#include <QTimer>
 
 #include <optional>
 
@@ -48,11 +49,16 @@ Q_SIGNALS:
     void changed();
 
 private:
+    void check();
     void rewatch();
 
     const Config &m_config;
     QFileSystemWatcher m_watcher;
+    QTimer m_settle;
+    QTimer m_confirm;
+    QTimer m_poll;
     QString m_path;
+    QString m_stamp;
     QColor m_last;
 };
 

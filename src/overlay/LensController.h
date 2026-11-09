@@ -109,6 +109,8 @@ class LensController : public QObject {
     // two animating screens vs ~5 ms with one).
     Q_PROPERTY(QString pointerScreen READ pointerScreen WRITE setPointerScreen NOTIFY pointerScreenChanged)
     Q_PROPERTY(qreal dotBrightness READ dotBrightness NOTIFY settingsChanged)
+    // Strength of the edge flash when recognised text arrives (0 = off).
+    Q_PROPERTY(qreal textReadyFlash READ textReadyFlash NOTIFY settingsChanged)
 public:
     LensController(Config &config, OcrService &ocr, QObject *parent = nullptr);
     ~LensController() override;
@@ -124,6 +126,7 @@ public:
     bool recognizeText() const;
     bool ocrSelectionOnly() const;
     qreal dotBrightness() const;
+    qreal textReadyFlash() const;
     bool snapToWindows() const;
     bool showHints() const;
     QString onSelect() const;

@@ -90,7 +90,7 @@ Window {
         rowIndex = rowsIdx
         if (lens.mode === "translate" && words.length > 0 && lensScreen.focused && !translated)
             translateAll()
-        if (words.length > 0)
+        if (words.length > 0 && lens.textReadyFlash > 0)
             pulseAnim.restart()   // text is ready: the edge dots flash once
     }
 
@@ -399,6 +399,7 @@ Window {
             property real spacing: 9
             property real tintMix: win.themeName === "aurora" ? 0.14 : 0
             property real boost: win.lens.dotBrightness
+            property real pulseGain: win.lens.textReadyFlash
             property color rimColor: win.rimA
             property color rimColor2: win.rimB
             property color dotColor: win.themeName === "aurora" ? win.rimB : win.accent
@@ -530,6 +531,7 @@ Window {
                 Component.onCompleted: opacity = 1
                 Behavior on opacity { SequentialAnimation { PauseAnimation { duration: index * 18 } NumberAnimation { duration: 200 } } }
                 Text {
+                    font.family: uiFont.family
                     anchors.fill: parent
                     anchors.leftMargin: 3
                     anchors.rightMargin: 3

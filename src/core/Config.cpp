@@ -29,6 +29,7 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("general.follow_portal_accent"), false},  // pre-0.1.5; see accent_source
         {QStringLiteral("general.accent_source"), QString()},  // selsearch | portal | pywal | noctalia | file ("" = from the two above)
         {QStringLiteral("general.accent_file"), QString()},    // for accent_source = file
+        {QStringLiteral("general.font"), QString()},           // interface font family, "" = system
         {QStringLiteral("general.color_scheme"), QStringLiteral("auto")},  // auto | light | dark
         {QStringLiteral("general.autostart"), false},  // Windows: start with Windows (Linux: selsearch.service)
 
@@ -38,6 +39,7 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("lens.snap_to_windows"), true},
         {QStringLiteral("lens.show_hints"), true},
         {QStringLiteral("lens.dot_brightness"), 1.0},  // dot field intensity, 0.5..3
+        {QStringLiteral("lens.text_ready_flash"), QStringLiteral("subtle")},  // off | subtle | strong: edge flash when text is read
 
         // Search
         {QStringLiteral("search.engine"), QStringLiteral("duckduckgo")},

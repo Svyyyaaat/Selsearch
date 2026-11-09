@@ -144,6 +144,7 @@ Window {
                 }
 
                 TextField {
+                    font.family: uiFont.family
                     id: input
                     anchors { left: chip.visible ? chip.right : modeIcon.right; leftMargin: 12; right: buttons.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
                     text: win.launcher.query
@@ -205,6 +206,7 @@ Window {
                 highlightMoveDuration: 0
                 section.property: "group"
                 section.delegate: Text {
+                    font.family: uiFont.family
                     required property string section
                     width: ListView.view.width
                     leftPadding: 24
@@ -246,6 +248,7 @@ Window {
                         anchors { left: rowIcon.right; leftMargin: 14; right: hint.left; rightMargin: 12; verticalCenter: parent.verticalCenter }
                         spacing: 1
                         Text {
+                            font.family: uiFont.family
                             width: parent.width
                             text: row.modelData.title
                             color: win.fg
@@ -253,6 +256,7 @@ Window {
                             elide: Text.ElideRight
                         }
                         Text {
+                            font.family: uiFont.family
                             width: parent.width
                             visible: text.length > 0
                             text: row.modelData.subtitle || ""
@@ -262,6 +266,7 @@ Window {
                         }
                     }
                     Text {
+                        font.family: uiFont.family
                         id: hint
                         anchors { right: parent.right; rightMargin: 24; verticalCenter: parent.verticalCenter }
                         visible: row.current
@@ -289,7 +294,7 @@ Window {
                         color: sHover.hovered ? Qt.rgba(1, 1, 1, 0.1) : Qt.rgba(1, 1, 1, 0.05)
                         HoverHandler { id: sHover }
                         TapHandler { onTapped: win.launcher.searchWeb(parent.modelData) }
-                        Text { id: sText; anchors.centerIn: parent; text: parent.modelData; color: win.fg; font.pixelSize: 13 }
+                        Text { font.family: uiFont.family; id: sText; anchors.centerIn: parent; text: parent.modelData; color: win.fg; font.pixelSize: 13 }
                     }
                 }
             }
@@ -317,6 +322,7 @@ Window {
 
                     // Natural width of the user's text, to size their bubble.
                     Text {
+                        font.family: uiFont.family
                         id: measure
                         visible: false
                         text: msg.modelData.text
@@ -344,6 +350,7 @@ Window {
                                 horizontalAlignment: Image.AlignLeft
                             }
                             Text {
+                                font.family: uiFont.family
                                 visible: !!msg.modelData.quote && !msg.modelData.image
                                 width: parent.width
                                 text: "“" + (msg.modelData.quote || "") + "”"
@@ -355,6 +362,7 @@ Window {
                                 wrapMode: Text.Wrap
                             }
                             TextEdit {
+                                font.family: uiFont.family
                                 width: parent.width
                                 readOnly: true
                                 selectByMouse: true
@@ -384,6 +392,7 @@ Window {
                 bottomPadding: 12
                 spacing: 4
                 Text {
+                    font.family: uiFont.family
                     x: 24
                     visible: win.launcher.threads.length > 0
                     text: qsTr("Recent")
@@ -408,6 +417,7 @@ Window {
                         TapHandler { onTapped: win.launcher.openThread(parent.modelData.id) }
                         Icon { id: hIcon; x: 24; anchors.verticalCenter: parent.verticalCenter; name: "history"; size: 16; color: win.fgDim }
                         Text {
+                            font.family: uiFont.family
                             anchors { left: hIcon.right; leftMargin: 12; right: del.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
                             text: parent.modelData.title
                             color: win.fg
@@ -426,6 +436,7 @@ Window {
                     }
                 }
                 Text {
+                    font.family: uiFont.family
                     visible: win.launcher.threads.length === 0
                     x: 24
                     width: parent.width - 48
@@ -442,6 +453,7 @@ Window {
                 width: parent.width
                 height: 34
                 Text {
+                    font.family: uiFont.family
                     anchors { left: parent.left; leftMargin: 22; verticalCenter: parent.verticalCenter }
                     color: "#6f7383"
                     font.pixelSize: 11
@@ -459,6 +471,7 @@ Window {
                         color: win.aiMode && win.launcher.aiRemoteHost !== "" ? "#f2b766" : "#7fd1a8"
                     }
                     Text {
+                        font.family: uiFont.family
                         color: "#7c8091"
                         font.pixelSize: 11
                         text: win.aiMode

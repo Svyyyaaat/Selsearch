@@ -4,6 +4,7 @@ import QtQuick.Layouts
 
 // Settings: every option maps 1:1 to a key in ~/.config/selsearch/config.toml.
 ApplicationWindow {
+    font.family: uiFont.family   // buttons, fields and combo boxes inherit it
     id: win
     required property var settings
     readonly property var cfg: settings.config
@@ -76,6 +77,7 @@ ApplicationWindow {
                 anchors.topMargin: 18
                 spacing: 2
                 Text {
+                    font.family: uiFont.family
                     x: 22
                     text: "Selsearch"
                     color: win.fg
@@ -99,7 +101,7 @@ ApplicationWindow {
                             anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
                             spacing: 10
                             Icon { anchors.verticalCenter: parent.verticalCenter; name: modelData.icon; size: 16; color: win.page === index ? win.fg : win.fgDim }
-                            Text { anchors.verticalCenter: parent.verticalCenter; text: modelData.name; color: win.page === index ? win.fg : win.fgDim; font.pixelSize: 14 }
+                            Text { font.family: uiFont.family; anchors.verticalCenter: parent.verticalCenter; text: modelData.name; color: win.page === index ? win.fg : win.fgDim; font.pixelSize: 14 }
                         }
                     }
                 }
@@ -117,6 +119,7 @@ ApplicationWindow {
                 padding: 28
                 spacing: 4
                 Text {
+                    font.family: uiFont.family
                     text: win.settings.welcome ? qsTr("Welcome to Selsearch") : win.pages[win.page].name
                     color: win.fg
                     font.pixelSize: 22
@@ -145,6 +148,7 @@ ApplicationWindow {
         Column {
             spacing: 18
             Text {
+                font.family: uiFont.family
                 width: parent.width
                 wrapMode: Text.Wrap
                 color: win.fgDim
@@ -200,7 +204,7 @@ ApplicationWindow {
                 body: qsTr("Point Selsearch at a local model server, e.g. install ollama and run: ollama pull qwen3-vl:4b. You can change this any time under AI.")
                 Button { text: qsTr("Test connection"); onClicked: win.settings.testAi() }
             }
-            Text { visible: win.settings.aiStatus.length > 0; text: win.settings.aiStatus; color: win.fgDim; font.pixelSize: 12 }
+            Text { font.family: uiFont.family; visible: win.settings.aiStatus.length > 0; text: win.settings.aiStatus; color: win.fgDim; font.pixelSize: 12 }
             Button {
                 text: qsTr("Done")
                 highlighted: true
@@ -220,13 +224,13 @@ ApplicationWindow {
         Rectangle {
             width: 28; height: 28; radius: 14
             color: Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.18)
-            Text { anchors.centerIn: parent; text: ws.number; color: win.accent; font.pixelSize: 13; font.weight: Font.DemiBold }
+            Text { font.family: uiFont.family; anchors.centerIn: parent; text: ws.number; color: win.accent; font.pixelSize: 13; font.weight: Font.DemiBold }
         }
         Column {
             width: ws.width - 42
             spacing: 8
-            Text { width: parent.width; text: ws.title; color: win.fg; font.pixelSize: 15; font.weight: Font.Medium; wrapMode: Text.Wrap }
-            Text { width: parent.width; text: ws.body; color: win.fgDim; font.pixelSize: 13; wrapMode: Text.Wrap }
+            Text { font.family: uiFont.family; width: parent.width; text: ws.title; color: win.fg; font.pixelSize: 15; font.weight: Font.Medium; wrapMode: Text.Wrap }
+            Text { font.family: uiFont.family; width: parent.width; text: ws.body; color: win.fgDim; font.pixelSize: 13; wrapMode: Text.Wrap }
             Item { id: stepBody; width: parent.width; height: childrenRect.height }
         }
     }
@@ -301,6 +305,18 @@ ApplicationWindow {
                     }
                 }
             }
+            SettingRow {
+                title: qsTr("Font")
+                subtitle: qsTr("Used by the lens, the launcher and these settings.")
+                LanguageButton {
+                    id: fontButton
+                    width: 260
+                    text: win.val("general.font") || qsTr("System default (%1)").arg(Qt.application.font.family)
+                    onClicked: win.pickLanguage(fontButton, win.val("general.font"), [{ code: "", name: qsTr("System default") }],
+                                                Qt.fontFamilies().filter(f => !f.startsWith(".")).map(f => ({ code: f, name: f })),
+                                                (family) => win.set("general.font", family))
+                }
+            }
             SliderRow { title: qsTr("Dot brightness"); key: "lens.dot_brightness"; from: 0.5; to: 3
                 subtitle: qsTr("How bright the dot field is. Raise it if the dots are hard to see with your accent colour.")
                 visible: win.val("general.theme") !== "mono" }
@@ -318,6 +334,9 @@ ApplicationWindow {
                 options: [{ id: "toolbar", name: qsTr("Show actions") }, { id: "search_image", name: qsTr("Search the image") },
                           { id: "search_text", name: qsTr("Search the text") }, { id: "ask", name: qsTr("Ask AI") }]
             }
+            ChoiceRow { title: qsTr("Flash when text is ready"); key: "lens.text_ready_flash"
+                subtitle: qsTr("The edge dots light up once when the text on screen has been read.")
+                options: [{ id: "off", name: qsTr("Off") }, { id: "subtle", name: qsTr("Subtle") }, { id: "strong", name: qsTr("Strong") }] }
             SwitchRow { title: qsTr("Recognise text on screen"); key: "lens.recognize_text"
                 subtitle: qsTr("Runs locally the moment the lens opens, so you can select words like text.") }
             SwitchRow { title: qsTr("Snap to windows"); key: "lens.snap_to_windows"
@@ -472,6 +491,7 @@ ApplicationWindow {
             spacing: 0
             readonly property string mode: win.settings.shortcutMode
             Text {
+                font.family: uiFont.family
                 width: parent.width
                 bottomPadding: 12
                 wrapMode: Text.Wrap
@@ -491,6 +511,7 @@ ApplicationWindow {
                 width: parent.width
                 spacing: 10
                 Text {
+                    font.family: uiFont.family
                     color: win.fg
                     font.pixelSize: 14
                     text: parent.parent.mode === "sway" ? qsTr("sway config") : qsTr("Hyprland config (~/.config/hypr/hyprland.lua)")
@@ -516,6 +537,7 @@ ApplicationWindow {
                 }
                 Button { text: qsTr("Copy"); onClicked: win.settings.copy(snippet.text) }
                 Text {
+                    font.family: uiFont.family
                     width: parent.width
                     wrapMode: Text.Wrap
                     color: win.fgDim
@@ -585,15 +607,16 @@ ApplicationWindow {
         id: aboutPage
         Column {
             spacing: 10
-            Text { text: "Selsearch " + win.settings.version; color: win.fg; font.pixelSize: 15 }
+            Text { font.family: uiFont.family; text: "Selsearch " + win.settings.version; color: win.fg; font.pixelSize: 15 }
             Text {
+                font.family: uiFont.family
                 width: parent.width
                 wrapMode: Text.Wrap
                 color: win.fgDim
                 font.pixelSize: 13
                 text: qsTr("Screen search, text recognition, translation and a launcher that work on your computer. Nothing is sent anywhere unless you search the web or use a remote AI endpoint. No telemetry.")
             }
-            Text { text: qsTr("Config file: %1").arg(win.settings.configPath); color: win.fgDim; font.pixelSize: 12 }
+            Text { font.family: uiFont.family; text: qsTr("Config file: %1").arg(win.settings.configPath); color: win.fgDim; font.pixelSize: 12 }
             Button { text: qsTr("Open config file"); onClicked: win.settings.openConfigFile() }
         }
     }
@@ -618,8 +641,8 @@ ApplicationWindow {
             y: sr.stacked ? 12 : (sr.height - implicitHeight) / 2
             width: sr.stacked ? sr.width : sr.width - holder.width - 20
             spacing: 3
-            Text { width: parent.width; text: sr.title; color: win.fg; font.pixelSize: 14; wrapMode: Text.Wrap }
-            Text { width: parent.width; visible: sr.subtitle.length > 0; text: sr.subtitle; color: win.fgDim; font.pixelSize: 12; wrapMode: Text.Wrap }
+            Text { font.family: uiFont.family; width: parent.width; text: sr.title; color: win.fg; font.pixelSize: 14; wrapMode: Text.Wrap }
+            Text { font.family: uiFont.family; width: parent.width; visible: sr.subtitle.length > 0; text: sr.subtitle; color: win.fgDim; font.pixelSize: 12; wrapMode: Text.Wrap }
         }
         Item {
             id: holder
@@ -663,6 +686,7 @@ ApplicationWindow {
         property bool list: false
         property bool secret: false
         Text {
+            font.family: uiFont.family
             id: savedMark
             anchors.right: field.left
             anchors.rightMargin: 8
@@ -675,6 +699,7 @@ ApplicationWindow {
             Timer { id: savedTimer; interval: 1200; onTriggered: savedMark.opacity = 0 }
         }
         TextField {
+            font.family: uiFont.family
             id: field
             width: 260
             placeholderText: tr.placeholder
@@ -720,7 +745,7 @@ ApplicationWindow {
                             id: chipRow
                             anchors.centerIn: parent
                             spacing: 6
-                            Text { anchors.verticalCenter: parent.verticalCenter; text: lr.nameOf(modelData); color: win.fg; font.pixelSize: 13 }
+                            Text { font.family: uiFont.family; anchors.verticalCenter: parent.verticalCenter; text: lr.nameOf(modelData); color: win.fg; font.pixelSize: 13 }
                             Icon {
                                 anchors.verticalCenter: parent.verticalCenter
                                 name: "x"; size: 12; color: win.fgDim
@@ -730,6 +755,7 @@ ApplicationWindow {
                     }
                 }
                 Text {
+                    font.family: uiFont.family
                     visible: lr.codes.length === 0
                     height: 28
                     verticalAlignment: Text.AlignVCenter
@@ -779,6 +805,7 @@ ApplicationWindow {
         id: lb
         height: 36
         contentItem: Text {
+            font.family: uiFont.family
             text: lb.text
             color: win.fg
             font.pixelSize: 13
@@ -858,6 +885,7 @@ ApplicationWindow {
                 }
             }
             Text {
+                font.family: uiFont.family
                 width: 44
                 anchors.verticalCenter: parent.verticalCenter
                 text: Math.round(slider.value * 100) + "%"
@@ -911,7 +939,7 @@ ApplicationWindow {
                     border.color: on ? "transparent" : win.line
                     HoverHandler { id: chHover }
                     TapHandler { onTapped: win.set(cr.key, parent.modelData.id) }
-                    Text { id: chText; anchors.centerIn: parent; text: parent.modelData.name; color: parent.on ? "#14151a" : win.fg; font.pixelSize: 13 }
+                    Text { font.family: uiFont.family; id: chText; anchors.centerIn: parent; text: parent.modelData.name; color: parent.on ? "#14151a" : win.fg; font.pixelSize: 13 }
                 }
             }
         }

@@ -28,6 +28,7 @@ Rectangle {
             onVisibleChanged: if (!root.ocrBusy) rotation = 0
         }
         Text {
+            font.family: uiFont.family
             anchors.verticalCenter: parent.verticalCenter
             color: "#eceef4"
             font.pixelSize: 13

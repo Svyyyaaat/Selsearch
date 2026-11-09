@@ -31,6 +31,7 @@ layout(std140, binding = 0) uniform buf {
     float spacing;   // dot grid pitch in pixels
     float tintMix;   // aurora: tint of the darkened area
     float boost;     // user dot brightness, 1 = default
+    float pulseGain; // strength of the "text is ready" flash (lens.text_ready_flash)
     vec4 rimColor;
     vec4 rimColor2;  // aurora second colour (== rimColor otherwise)
     vec4 dotColor;
@@ -83,7 +84,7 @@ float dotIntensity(vec2 cell, vec2 cc, vec2 c, float r)
         if (pulse >= 0.0) {
             // Quick rise, slower fall; reaches a little further in than the glow.
             float env = sin(PI * sqrt(pulse)) * (1.0 - pulse * 0.3);
-            intensity += exp(-edgeDist / (spacing * 9.0)) * env * 1.3;
+            intensity += exp(-edgeDist / (spacing * 9.0)) * env * pulseGain;
         }
     }
     if (nearSel) {
