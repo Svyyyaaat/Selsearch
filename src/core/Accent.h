@@ -31,8 +31,11 @@ QColor defaultAccent();
 
 // The effective source ("selsearch", "portal", "pywal", "noctalia", "file").
 QString accentSource(const Config &config);
-// The file a file-based source reads ("" for selsearch/portal).
+// The file a file-based source reads ("" for selsearch/portal). For Noctalia
+// the newest of the files it writes (see Accent.cpp).
 QString accentSourcePath(const Config &config);
+// Every file whose change can change the accent (Noctalia: all candidates).
+QStringList accentWatchPaths(const Config &config);
 // The colour a file-based source provides right now, if it can be read.
 std::optional<QColor> accentFromSource(const Config &config);
 
@@ -51,13 +54,14 @@ Q_SIGNALS:
 private:
     void check();
     void rewatch();
+    QString stamps() const;  // mtime/size of every watched file that exists
 
     const Config &m_config;
     QFileSystemWatcher m_watcher;
     QTimer m_settle;
     QTimer m_confirm;
     QTimer m_poll;
-    QString m_path;
+    QStringList m_paths;
     QString m_stamp;
     QColor m_last;
 };

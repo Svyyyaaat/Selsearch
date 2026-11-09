@@ -3,6 +3,7 @@
 
 #include "Config.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -84,14 +85,74 @@ QString pywalPath()
     return envDir("XDG_CACHE_HOME", QDir::homePath() + QStringLiteral("/.cache")) + QStringLiteral("/wal/colors.json");
 }
 
-// Noctalia 4 writes the active colours to <config dir>/colors.json; its
-// config dir is $NOCTALIA_CONFIG_DIR, else $XDG_CONFIG_HOME/noctalia.
+// Noctalia files that carry the primary (accent) colour, and how to read it.
+// Noctalia 4 writes the palette to <config dir>/colors.json
+// ($NOCTALIA_CONFIG_DIR, else $XDG_CONFIG_HOME/noctalia). Noctalia 5 keeps
+// the palette in memory and only writes it through the theme templates the
+// user enables (assets/templates/builtin.toml); each of these carries
+// colors.primary, so whichever the user has enabled works.
+struct NoctaliaFile {
+    QString path;
+    QRegularExpression pattern;  // capture 1: rrggbb, or r,g,b (kde)
+};
+
+const QList<NoctaliaFile> &noctaliaFiles()
+{
+    static const QList<NoctaliaFile> files = [] {
+        const QString cfg = envDir("XDG_CONFIG_HOME", QDir::homePath() + QStringLiteral("/.config"));
+        const QString data = envDir("XDG_DATA_HOME", QDir::homePath() + QStringLiteral("/.local/share"));
+        const QString v4dir = qEnvironmentVariable("NOCTALIA_CONFIG_DIR");
+        const QString v4 = v4dir.isEmpty() ? cfg + QStringLiteral("/noctalia/colors.json") : QDir(v4dir).filePath(QStringLiteral("colors.json"));
+        auto re = [](const char *p) { return QRegularExpression(QString::fromLatin1(p)); };
+        return QList<NoctaliaFile>{
+            {v4, {}},  // JSON, mPrimary
+            {cfg + QStringLiteral("/hypr/noctalia.lua"), re(R"re(\bprimary\s*=\s*"rgb\(([0-9a-fA-F]{6})\)")re")},
+            {cfg + QStringLiteral("/hypr/noctalia.conf"), re(R"re(\$primary\s*=\s*rgb\(([0-9a-fA-F]{6})\))re")},
+            {cfg + QStringLiteral("/niri/noctalia.kdl"), re(R"re(active-color\s+"#([0-9a-fA-F]{6})")re")},
+            {cfg + QStringLiteral("/gtk-4.0/noctalia.css"), re(R"re(@define-color accent_color #([0-9a-fA-F]{6}))re")},
+            {cfg + QStringLiteral("/gtk-3.0/noctalia.css"), re(R"re(@define-color accent_color #([0-9a-fA-F]{6}))re")},
+            {cfg + QStringLiteral("/kitty/themes/noctalia.conf"), re(R"re(active_border_color\s+#([0-9a-fA-F]{6}))re")},
+            {cfg + QStringLiteral("/sway/noctalia"), re(R"re(set \$primary\s+#([0-9a-fA-F]{6}))re")},
+            {cfg + QStringLiteral("/mango/noctalia.conf"), re(R"re(focus_color\s*=\s*0x([0-9a-fA-F]{6}))re")},
+            {data + QStringLiteral("/color-schemes/noctalia.colors"), re(R"re(DecorationFocus=(\d+,\d+,\d+))re")},
+        };
+    }();
+    return files;
+}
+
+// The Noctalia file to read: the most recently written one that exists (all
+// are rewritten together on a palette change; a stale one from an old setup
+// loses). Noctalia 4's colors.json when none exists, for the status text.
 QString noctaliaPath()
 {
-    const QString dir = qEnvironmentVariable("NOCTALIA_CONFIG_DIR");
-    if (!dir.isEmpty())
-        return QDir(dir).filePath(QStringLiteral("colors.json"));
-    return envDir("XDG_CONFIG_HOME", QDir::homePath() + QStringLiteral("/.config")) + QStringLiteral("/noctalia/colors.json");
+    QString best;
+    QDateTime bestTime;
+    for (const NoctaliaFile &f : noctaliaFiles()) {
+        const QFileInfo fi(f.path);
+        if (fi.exists() && (best.isEmpty() || fi.lastModified() > bestTime)) {
+            best = f.path;
+            bestTime = fi.lastModified();
+        }
+    }
+    return best.isEmpty() ? noctaliaFiles().first().path : best;
+}
+
+std::optional<QColor> fromNoctaliaTemplate(const QString &path, const QByteArray &data)
+{
+    for (const NoctaliaFile &f : noctaliaFiles()) {
+        if (f.path != path || !f.pattern.isValid() || f.pattern.pattern().isEmpty())
+            continue;
+        const QRegularExpressionMatch m = f.pattern.match(QString::fromUtf8(data));
+        if (!m.hasMatch())
+            return std::nullopt;
+        const QString v = m.captured(1);
+        if (v.contains(QLatin1Char(','))) {
+            const QStringList rgb = v.split(QLatin1Char(','));
+            return QColor(rgb.value(0).toInt(), rgb.value(1).toInt(), rgb.value(2).toInt());
+        }
+        return QColor(QLatin1Char('#') + v);
+    }
+    return std::nullopt;
 }
 
 QString expandHome(QString path)
@@ -148,6 +209,8 @@ std::optional<QColor> readAccentFile(const QString &kind, const QString &path)
     if (path.isEmpty() || !f.open(QIODevice::ReadOnly))
         return std::nullopt;
     const QByteArray data = f.read(256 * 1024);
+    if (kind == QLatin1String("noctalia") && !path.endsWith(QLatin1String(".json")))
+        return fromNoctaliaTemplate(path, data);
     const QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isObject()) {
         const QJsonObject root = doc.object();
@@ -198,6 +261,18 @@ QString accentSourcePath(const Config &config)
     if (s == QLatin1String("file"))
         return expandHome(config.string(QStringLiteral("general.accent_file")));
     return {};
+}
+
+QStringList accentWatchPaths(const Config &config)
+{
+    if (accentSource(config) == QLatin1String("noctalia")) {
+        QStringList out;
+        for (const NoctaliaFile &f : noctaliaFiles())
+            out << f.path;
+        return out;
+    }
+    const QString p = accentSourcePath(config);
+    return p.isEmpty() ? QStringList() : QStringList{p};
 }
 
 std::optional<QColor> accentFromSource(const Config &config)
@@ -263,9 +338,7 @@ AccentWatcher::AccentWatcher(const Config &config, QObject *parent)
     // modification time every few seconds. One stat() per poll.
     m_poll.setInterval(3000);
     connect(&m_poll, &QTimer::timeout, this, [this] {
-        const QFileInfo fi(m_path);
-        const QString stamp = fi.exists() ? QStringLiteral("%1/%2").arg(fi.lastModified().toMSecsSinceEpoch()).arg(fi.size()) : QString();
-        if (stamp != m_stamp)
+        if (stamps() != m_stamp)
             m_settle.start();
     });
     check();
@@ -274,40 +347,50 @@ AccentWatcher::AccentWatcher(const Config &config, QObject *parent)
 void AccentWatcher::check()
 {
     rewatch();  // a replaced file has a new inode: watch it again
-    const QFileInfo fi(m_path);
-    m_stamp = fi.exists() ? QStringLiteral("%1/%2").arg(fi.lastModified().toMSecsSinceEpoch()).arg(fi.size()) : QString();
+    m_stamp = stamps();
     const QColor c = accentColor(m_config);
     if (c == m_last)
         return;
     m_last = c;
     qCInfo(lcAccent).noquote() << "accent" << c.name() << "from" << accentSource(m_config)
-                               << (m_path.isEmpty() ? QString() : m_path);
+                               << accentSourcePath(m_config);
     Q_EMIT changed();
+}
+
+QString AccentWatcher::stamps() const
+{
+    QString out;
+    for (const QString &p : m_paths) {
+        const QFileInfo fi(p);
+        if (fi.exists())
+            out += QStringLiteral("%1:%2/%3;").arg(p).arg(fi.lastModified().toMSecsSinceEpoch()).arg(fi.size());
+    }
+    return out;
 }
 
 void AccentWatcher::rewatch()
 {
-    const QString path = accentSourcePath(m_config);
     if (!m_watcher.files().isEmpty())
         m_watcher.removePaths(m_watcher.files());
     if (!m_watcher.directories().isEmpty())
         m_watcher.removePaths(m_watcher.directories());
-    m_path = path;
-    if (path.isEmpty()) {
+    m_paths = accentWatchPaths(m_config);
+    if (m_paths.isEmpty()) {
         m_poll.stop();
         return;
     }
-    QStringList paths;
-    const QFileInfo fi(path);
-    paths << fi.absolutePath();
-    if (fi.exists())
-        paths << path;
-    // A symlink: watch where it points as well.
-    const QString target = fi.canonicalFilePath();
-    if (!target.isEmpty() && target != fi.absoluteFilePath())
-        paths << target << QFileInfo(target).absolutePath();
-    for (const QString &p : std::as_const(paths))
-        if (QFileInfo::exists(p) && !m_watcher.files().contains(p) && !m_watcher.directories().contains(p))
+    QStringList watch;
+    for (const QString &path : std::as_const(m_paths)) {
+        const QFileInfo fi(path);
+        watch << fi.absolutePath() << path;
+        // A symlink: watch where it points as well.
+        const QString target = fi.canonicalFilePath();
+        if (!target.isEmpty() && target != fi.absoluteFilePath())
+            watch << target << QFileInfo(target).absolutePath();
+    }
+    watch.removeDuplicates();
+    for (const QString &p : std::as_const(watch))
+        if (QFileInfo::exists(p))
             m_watcher.addPath(p);
     if (!m_poll.isActive())
         m_poll.start();

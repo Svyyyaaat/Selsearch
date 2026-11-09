@@ -256,7 +256,7 @@ QString Settings::accentStatus() const
     if (source == QLatin1String("file") && path.isEmpty())
         return tr("Choose a file below.");
     if (source == QLatin1String("noctalia"))
-        return tr("%1 not found. Noctalia 4 writes it; with Noctalia 5 add a template that writes {\"mPrimary\": \"{{ colors.primary.default.hex }}\"} there. Using the colour below meanwhile.").arg(path);
+        return tr("No Noctalia colours found. Noctalia 5 only writes its colours through its theme templates: enable one in Noctalia's settings (Hyprland, niri, GTK, kitty, sway, KDE…) and Selsearch reads the accent from it. Using the colour below meanwhile.");
     if (source == QLatin1String("pywal"))
         return tr("%1 not found; run wal (or wallust with its pywal template) once. Using the colour below meanwhile.").arg(path);
     return tr("No colour found in %1. Using the colour below meanwhile.").arg(path);
