@@ -26,7 +26,9 @@ const QVariantMap &Config::defaults()
         // Appearance
         {QStringLiteral("general.theme"), QStringLiteral("signal")},  // signal | mono | aurora
         {QStringLiteral("general.accent"), QString()},                // "#rrggbb", empty = built-in palette
-        {QStringLiteral("general.follow_portal_accent"), false},
+        {QStringLiteral("general.follow_portal_accent"), false},  // pre-0.1.5; see accent_source
+        {QStringLiteral("general.accent_source"), QString()},  // selsearch | portal | pywal | noctalia | file ("" = from the two above)
+        {QStringLiteral("general.accent_file"), QString()},    // for accent_source = file
         {QStringLiteral("general.color_scheme"), QStringLiteral("auto")},  // auto | light | dark
         {QStringLiteral("general.autostart"), false},  // Windows: start with Windows (Linux: selsearch.service)
 

@@ -156,6 +156,14 @@ On first start a welcome page opens (later: `selsearch config`).
    with your selection. For fully local, in-place translation install
    [translateLocally](https://translatelocally.com) or run a
    [LibreTranslate](https://libretranslate.com) server.
+5. **Accent colour.** *Appearance → Accent colour from*: pick one yourself,
+   or follow the desktop (GNOME/KDE portal), **pywal**
+   (`~/.cache/wal/colors.json`), **Noctalia** (`mPrimary` from
+   `~/.config/noctalia/colors.json`) or any file. It updates live when the
+   file changes. Noctalia 5 doesn't write that file by itself; add a template
+   whose output is `~/.config/noctalia/colors.json` with the content
+   `{"mPrimary": "{{ colors.primary.default.hex }}"}`, or use *File* with
+   any template output that contains the colour (the first `#rrggbb` counts).
 
 Everything is also in `~/.config/selsearch/config.toml`
 (`%LOCALAPPDATA%\selsearch\config.toml` on Windows).

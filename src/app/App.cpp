@@ -6,6 +6,7 @@
 #include "WebPanel.h"
 #include "search/ImageSearch.h"
 #include "search/SearchEngines.h"
+#include "core/Accent.h"
 #include "core/Config.h"
 #include "core/Ipc.h"
 #include "ocr/OcrService.h"
@@ -95,6 +96,13 @@ bool App::init(QString *error)
     m_settings = std::make_unique<Settings>(*m_config, *m_ocr);
     m_settings->setEngine(m_engine.get());
     connect(m_launcher.get(), &Launcher::settingsRequested, m_settings.get(), &Settings::show);
+    // pywal / Noctalia / file accents change when the wallpaper or theme does.
+    auto *accentWatcher = new AccentWatcher(*m_config, this);
+    connect(accentWatcher, &AccentWatcher::changed, this, [this] {
+        Q_EMIT m_lens->settingsChanged();
+        Q_EMIT m_launcher->settingsChanged();
+        Q_EMIT m_settings->accentChanged();
+    });
     connect(m_settings.get(), &Settings::signInRequested, this, [this](const QUrl &url) {
         // Signing in only makes sense with a profile that keeps cookies.
         QScreen *screen = QGuiApplication::screenAt(QCursor::pos());

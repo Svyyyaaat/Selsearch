@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "Settings.h"
 
+#include "core/Accent.h"
 #include "core/Config.h"
 #include "ocr/ModelStore.h"
 #include "ocr/OcrService.h"
@@ -232,6 +233,33 @@ void Settings::openConfigFile()
     if (!QFileInfo::exists(m_config.path()))
         m_config.save();
     QDesktopServices::openUrl(QUrl::fromLocalFile(m_config.path()));
+}
+
+QColor Settings::accent() const
+{
+    return accentColor(m_config);
+}
+
+QString Settings::accentStatus() const
+{
+    const QString source = accentSource(m_config);
+    if (source == QLatin1String("selsearch"))
+        return {};
+    const auto c = accentFromSource(m_config);
+    QString path = accentSourcePath(m_config);
+    if (path.startsWith(QDir::homePath()))
+        path = QLatin1Char('~') + path.mid(QDir::homePath().size());
+    if (source == QLatin1String("portal"))
+        return c ? tr("Using %1 from the desktop.").arg(c->name()) : tr("The desktop doesn't provide an accent colour; using the colour below.");
+    if (c)
+        return tr("Using %1 from %2. Updates when the file changes.").arg(c->name(), path);
+    if (source == QLatin1String("file") && path.isEmpty())
+        return tr("Choose a file below.");
+    if (source == QLatin1String("noctalia"))
+        return tr("%1 not found. Noctalia 4 writes it; with Noctalia 5 add a template that writes {\"mPrimary\": \"{{ colors.primary.default.hex }}\"} there. Using the colour below meanwhile.").arg(path);
+    if (source == QLatin1String("pywal"))
+        return tr("%1 not found; run wal (or wallust with its pywal template) once. Using the colour below meanwhile.").arg(path);
+    return tr("No colour found in %1. Using the colour below meanwhile.").arg(path);
 }
 
 void Settings::setNativeKeyCapture(bool on)

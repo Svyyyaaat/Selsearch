@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 #include "capture/ImageTransform.h"
 #include "compositor/Compositor.h"
+#include "core/Accent.h"
 #include "core/Config.h"
 #include "platform/KeyNames.h"
 #include "ocr/OcrEngine.h"
 
+#include <QDir>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -48,16 +51,67 @@ private Q_SLOTS:
         QCOMPARE(c.string(QStringLiteral("search.engine")), QStringLiteral("duckduckgo"));
     }
 
+    void accentSources()
+    {
+        QTemporaryDir dir;
+        auto write = [&](const QString &name, const QByteArray &data) {
+            const QString p = dir.filePath(name);
+            QDir().mkpath(QFileInfo(p).absolutePath());
+            QFile f(p);
+            if (!f.open(QIODevice::WriteOnly))
+                return QString();
+            f.write(data);
+            return p;
+        };
+        qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
+        qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
+        qunsetenv("NOCTALIA_CONFIG_DIR");
+        Config c;
+        QVERIFY(c.load(dir.filePath(QStringLiteral("selsearch.toml"))));
+        c.setValue(QStringLiteral("general.accent"), QStringLiteral("#123456"));
+
+        // Missing file: falls back to general.accent.
+        c.setValue(QStringLiteral("general.accent_source"), QStringLiteral("pywal"));
+        QCOMPARE(accentColor(c), QColor(QStringLiteral("#123456")));
+
+        // pywal: the most vivid of color1..6, not the greys.
+        write(QStringLiteral("cache/wal/colors.json"),
+              "{\"colors\": {\"color0\": \"#101010\", \"color1\": \"#5a6b7a\", \"color2\": \"#e0482e\", \"color3\": \"#7a8c5a\",\n"
+              "                              \"color4\": \"#4c6e9e\", \"color5\": \"#8a6a9a\", \"color6\": \"#6a9a9a\", \"color7\": \"#c4c6c9\"}}");
+        QCOMPARE(accentColor(c), QColor(QStringLiteral("#e0482e")));
+        QVERIFY(accentSourcePath(c).endsWith(QStringLiteral("/wal/colors.json")));
+
+        // Noctalia 4: flat mPrimary in $XDG_CONFIG_HOME/noctalia/colors.json.
+        c.setValue(QStringLiteral("general.accent_source"), QStringLiteral("noctalia"));
+        write(QStringLiteral("config/noctalia/colors.json"), "{\"mPrimary\": \"#a6e22e\", \"mSurface\": \"#272822\"}");
+        QCOMPARE(accentColor(c), QColor(QStringLiteral("#a6e22e")));
+        // A palette file with dark/light variants works too.
+        write(QStringLiteral("config/noctalia/colors.json"), "{\"dark\": {\"mPrimary\": \"#ff79c6\"}, \"light\": {\"mPrimary\": \"#000000\"}}");
+        QCOMPARE(accentColor(c), QColor(QStringLiteral("#ff79c6")));
+
+        // Any file: the first #rrggbb of a template output.
+        c.setValue(QStringLiteral("general.accent_source"), QStringLiteral("file"));
+        c.setValue(QStringLiteral("general.accent_file"), write(QStringLiteral("accent.css"), "@define-color accent #33ccff;\n@define-color bg #000000;\n"));
+        QCOMPARE(accentColor(c), QColor(QStringLiteral("#33ccff")));
+
+        // Before accent_source existed: the portal switch, unless a colour was picked.
+        c.reset(QStringLiteral("general.accent_source"));
+        c.setValue(QStringLiteral("general.follow_portal_accent"), true);
+        QCOMPARE(accentSource(c), QStringLiteral("selsearch"));
+        c.reset(QStringLiteral("general.accent"));
+        QCOMPARE(accentSource(c), QStringLiteral("portal"));
+    }
+
     void hyprlandParsing()
     {
-        const QByteArray monitors = R"([{"id":0,"activeWorkspace":{"id":1},"specialWorkspace":{"id":0}},
-                                       {"id":1,"activeWorkspace":{"id":3},"specialWorkspace":{"id":0}}])";
-        const QByteArray clients = R"([
-            {"at":[0,0],"size":[100,100],"title":"tiled-old","class":"a","workspace":{"id":1},"mapped":true,"hidden":false,"floating":false,"focusHistoryID":2},
-            {"at":[10,10],"size":[50,50],"title":"float","class":"b","workspace":{"id":1},"mapped":true,"hidden":false,"floating":true,"focusHistoryID":3},
-            {"at":[0,0],"size":[100,100],"title":"focused","class":"c","workspace":{"id":3},"mapped":true,"hidden":false,"floating":false,"focusHistoryID":0},
-            {"at":[0,0],"size":[100,100],"title":"other-ws","class":"d","workspace":{"id":2},"mapped":true,"hidden":false,"floating":false,"focusHistoryID":1}
-        ])";
+        const QByteArray monitors = "[{\"id\":0,\"activeWorkspace\":{\"id\":1},\"specialWorkspace\":{\"id\":0}},\n"
+              "                                       {\"id\":1,\"activeWorkspace\":{\"id\":3},\"specialWorkspace\":{\"id\":0}}]";
+        const QByteArray clients = "[\n"
+              "            {\"at\":[0,0],\"size\":[100,100],\"title\":\"tiled-old\",\"class\":\"a\",\"workspace\":{\"id\":1},\"mapped\":true,\"hidden\":false,\"floating\":false,\"focusHistoryID\":2},\n"
+              "            {\"at\":[10,10],\"size\":[50,50],\"title\":\"float\",\"class\":\"b\",\"workspace\":{\"id\":1},\"mapped\":true,\"hidden\":false,\"floating\":true,\"focusHistoryID\":3},\n"
+              "            {\"at\":[0,0],\"size\":[100,100],\"title\":\"focused\",\"class\":\"c\",\"workspace\":{\"id\":3},\"mapped\":true,\"hidden\":false,\"floating\":false,\"focusHistoryID\":0},\n"
+              "            {\"at\":[0,0],\"size\":[100,100],\"title\":\"other-ws\",\"class\":\"d\",\"workspace\":{\"id\":2},\"mapped\":true,\"hidden\":false,\"floating\":false,\"focusHistoryID\":1}\n"
+              "        ]";
         const auto w = parseHyprlandWindows(clients, monitors);
         QCOMPARE(w.size(), 3);
         QCOMPARE(w[0].title, QStringLiteral("float"));
@@ -69,12 +123,12 @@ private Q_SLOTS:
 
     void swayParsing()
     {
-        const QByteArray tree = R"({"type":"root","nodes":[{"type":"output","nodes":[{"type":"workspace","nodes":[
-            {"type":"con","pid":1,"app_id":"foot","name":"term","visible":true,"focused":true,"rect":{"x":0,"y":0,"width":800,"height":600},"nodes":[]},
-            {"type":"con","pid":2,"app_id":"hidden","name":"h","visible":false,"rect":{"x":0,"y":0,"width":800,"height":600},"nodes":[]}
-        ],"floating_nodes":[
-            {"type":"floating_con","pid":3,"app_id":"pop","name":"popup","visible":true,"rect":{"x":100,"y":100,"width":200,"height":100},"nodes":[]}
-        ]}]}]})";
+        const QByteArray tree = "{\"type\":\"root\",\"nodes\":[{\"type\":\"output\",\"nodes\":[{\"type\":\"workspace\",\"nodes\":[\n"
+              "            {\"type\":\"con\",\"pid\":1,\"app_id\":\"foot\",\"name\":\"term\",\"visible\":true,\"focused\":true,\"rect\":{\"x\":0,\"y\":0,\"width\":800,\"height\":600},\"nodes\":[]},\n"
+              "            {\"type\":\"con\",\"pid\":2,\"app_id\":\"hidden\",\"name\":\"h\",\"visible\":false,\"rect\":{\"x\":0,\"y\":0,\"width\":800,\"height\":600},\"nodes\":[]}\n"
+              "        ],\"floating_nodes\":[\n"
+              "            {\"type\":\"floating_con\",\"pid\":3,\"app_id\":\"pop\",\"name\":\"popup\",\"visible\":true,\"rect\":{\"x\":100,\"y\":100,\"width\":200,\"height\":100},\"nodes\":[]}\n"
+              "        ]}]}]}";
         const auto w = parseSwayTree(tree);
         QCOMPARE(w.size(), 2);
         QCOMPARE(w[0].appId, QStringLiteral("pop"));
@@ -106,7 +160,7 @@ private Q_SLOTS:
 
     void focusedOutput()
     {
-        QCOMPARE(parseFocusedOutput(R"([{"name":"DP-1","focused":false},{"name":"HDMI-A-1","focused":true}])"), QStringLiteral("HDMI-A-1"));
+        QCOMPARE(parseFocusedOutput("[{\"name\":\"DP-1\",\"focused\":false},{\"name\":\"HDMI-A-1\",\"focused\":true}]"), QStringLiteral("HDMI-A-1"));
         QCOMPARE(parseFocusedOutput("[]"), QString());
     }
 

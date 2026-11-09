@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QVariantList>
+#include <QColor>
 #include <QUrl>
 #include <QVariantMap>
 
@@ -36,6 +37,9 @@ class Settings : public QObject {
     Q_PROPERTY(bool welcome READ welcome NOTIFY welcomeChanged)
     // "inapp" (Windows), "portal" (KDE/GNOME), "hyprland", "sway", "other"
     Q_PROPERTY(QString shortcutMode READ shortcutMode CONSTANT)
+    Q_PROPERTY(QColor accent READ accent NOTIFY accentChanged)
+    // Where the accent comes from right now, for the Appearance page.
+    Q_PROPERTY(QString accentStatus READ accentStatus NOTIFY accentChanged)
     // The recorder takes keys from the platform (Windows), not Qt key events.
     Q_PROPERTY(bool nativeKeyCapture READ nativeKeyCapture NOTIFY shortcutStateChanged)
     // shortcut id ("lens") -> why it could not be registered
@@ -73,6 +77,9 @@ public:
     Q_INVOKABLE QString displayKeys(const QString &sequence) const;
     Q_INVOKABLE void copy(const QString &text);
 
+    QColor accent() const;
+    QString accentStatus() const;
+
     bool nativeKeyCapture() const { return m_nativeKeyCapture; }
     void setNativeKeyCapture(bool on);
     QVariantMap shortcutErrors() const { return m_shortcutErrors; }
@@ -88,6 +95,7 @@ Q_SIGNALS:
     void ocrStatusChanged();
     void welcomeChanged();
     void shortcutStateChanged();
+    void accentChanged();
     void keyCaptureRequested(bool on);
     void keysCaptured(const QString &sequence);
     void signInRequested(const QUrl &url);

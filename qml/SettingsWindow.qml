@@ -36,7 +36,7 @@ ApplicationWindow {
     readonly property color fg: "#eceef4"
     readonly property color fgDim: "#9a9eab"
     readonly property color line: Qt.rgba(1, 1, 1, 0.07)
-    readonly property color accent: "#8e9bff"
+    readonly property color accent: win.settings.accent
     // Windows: hotkeys are registered in-app, so no compositor snippet.
     readonly property bool isWindows: Qt.platform.os === "windows"
     property int page: 0
@@ -240,10 +240,28 @@ ApplicationWindow {
                 subtitle: qsTr("Signal darkens the screen and lights a dot field around your selection. Mono only darkens. Aurora tints with two hues of your accent.")
                 options: [{ id: "signal", name: qsTr("Signal") }, { id: "mono", name: qsTr("Mono") }, { id: "aurora", name: qsTr("Aurora") }]
             }
+            ChoiceRow {
+                id: accentSource
+                title: qsTr("Accent colour from"); key: "general.accent_source"
+                // Before accent_source existed: the portal switch, unless a colour was picked.
+                current: win.val("general.accent_source")
+                         || (win.val("general.follow_portal_accent") && !win.val("general.accent") ? "portal" : "selsearch")
+                subtitle: { win.rev; return win.settings.accentStatus || qsTr("Used for the dot field, text selection and buttons.") }
+                options: win.isWindows
+                    ? [{ id: "selsearch", name: qsTr("Pick below") }, { id: "portal", name: qsTr("Windows") }]
+                    : [{ id: "selsearch", name: qsTr("Pick below") }, { id: "portal", name: qsTr("Desktop") },
+                       { id: "pywal", name: "pywal" }, { id: "noctalia", name: "Noctalia" }, { id: "file", name: qsTr("File") }]
+            }
+            TextRow {
+                visible: accentSource.current === "file"
+                title: qsTr("Colour file"); key: "general.accent_file"; placeholder: "~/.cache/matugen/accent"
+                subtitle: qsTr("A colors.json (pywal or Noctalia format) or any text file whose first #rrggbb is the accent, e.g. a matugen or wallust template output.")
+            }
             SettingRow {
                 id: accentRow
-                title: qsTr("Accent colour")
-                subtitle: qsTr("Used for the dot field, text selection and buttons.")
+                title: accentSource.current === "selsearch" ? qsTr("Accent colour") : qsTr("Fallback colour")
+                subtitle: accentSource.current === "selsearch" ? qsTr("Used for the dot field, text selection and buttons.")
+                                                               : qsTr("Used while the source above has no colour.")
                 readonly property string current: win.val("general.accent") || ""
                 readonly property var presets: ["", "#7aa2f7", "#5eead4", "#a3e635", "#facc15", "#fb923c", "#f472b6", "#c084fc", "#e5e7eb"]
                 Row {
@@ -286,9 +304,6 @@ ApplicationWindow {
             SliderRow { title: qsTr("Dot brightness"); key: "lens.dot_brightness"; from: 0.5; to: 3
                 subtitle: qsTr("How bright the dot field is. Raise it if the dots are hard to see with your accent colour.")
                 visible: win.val("general.theme") !== "mono" }
-            SwitchRow { title: qsTr("Follow the desktop accent colour"); key: "general.follow_portal_accent"
-                subtitle: win.isWindows ? qsTr("Uses the accent colour from Windows settings.")
-                                        : qsTr("Reads the accent from xdg-desktop-portal when your desktop provides one (GNOME, KDE). Falls back to the colour above.") }
             SwitchRow { title: qsTr("Start with Windows"); key: "general.autostart"; visible: win.isWindows
                 subtitle: qsTr("Runs Selsearch in the background after you sign in, so the shortcuts work right away.") }
         }
@@ -871,13 +886,14 @@ ApplicationWindow {
         property string key
         property var options: []
         property bool combo: false
+        property var current: win.val(key)   // shown selection; override for derived values
         ComboBox {
             visible: cr.combo
             width: 260
             textRole: "name"
             valueRole: "id"
             model: cr.options
-            currentIndex: { const v = win.val(cr.key); for (let i = 0; i < cr.options.length; ++i) if (cr.options[i].id === v) return i; return 0 }
+            currentIndex: { const v = cr.current; for (let i = 0; i < cr.options.length; ++i) if (cr.options[i].id === v) return i; return 0 }
             onActivated: win.set(cr.key, currentValue)
         }
         Row {
@@ -887,7 +903,7 @@ ApplicationWindow {
                 model: cr.combo ? [] : cr.options
                 delegate: Rectangle {
                     required property var modelData
-                    readonly property bool on: win.val(cr.key) === modelData.id
+                    readonly property bool on: cr.current === modelData.id
                     height: 32
                     width: chText.implicitWidth + 24
                     radius: 16
