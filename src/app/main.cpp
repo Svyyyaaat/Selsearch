@@ -6,12 +6,14 @@
 
 #include "App.h"
 
+#include <QFile>
 #include <QGuiApplication>
 #include <QQuickStyle>
 #include <QQuickWindow>
 
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 #ifdef Q_OS_WIN
 #include <QApplication>  // QSystemTrayIcon needs a QApplication
@@ -27,6 +29,10 @@
 
 int main(int argc, char **argv)
 {
+    // The original arguments, before Qt removes the ones it consumes; used to
+    // exec() an updated binary (see App::kRestartExitCode).
+    std::vector<char *> args(argv, argv + argc);
+    args.push_back(nullptr);
 #ifdef Q_OS_WIN
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--version") == 0) {
@@ -53,6 +59,11 @@ int main(int argc, char **argv)
     QApplication app(argc, argv);
 #else
     QGuiApplication app(argc, argv);
+#endif
+#ifndef Q_OS_WIN
+    // For restarting into an updated binary (see App::kRestartExitCode):
+    // the path must be read before the file can be replaced.
+    const QByteArray exePath = QFile::encodeName(QCoreApplication::applicationFilePath());
 #endif
     QGuiApplication::setApplicationName(QStringLiteral("selsearch"));
     QGuiApplication::setApplicationVersion(QStringLiteral(SELSEARCH_VERSION));
@@ -86,11 +97,23 @@ int main(int argc, char **argv)
     }
 #endif
 
-    selsearch::App selsearchApp;
-    QString error;
-    if (!selsearchApp.init(&error)) {
-        std::fprintf(stderr, "selsearchd: %s\n", qPrintable(error));
+    int rc = 0;
+    {
+        selsearch::App selsearchApp;
+        QString error;
+        if (!selsearchApp.init(&error)) {
+            std::fprintf(stderr, "selsearchd: %s\n", qPrintable(error));
+            return 1;
+        }
+        rc = app.exec();
+    }  // tear everything down (IPC socket, windows) before replacing the process
+#ifndef Q_OS_WIN
+    if (rc == selsearch::App::kRestartExitCode) {
+        std::fflush(nullptr);
+        ::execv(exePath.constData(), args.data());
+        std::perror("selsearchd: restarting after an update failed");
         return 1;
     }
-    return app.exec();
+#endif
+    return rc;
 }

@@ -235,6 +235,11 @@ void Settings::openConfigFile()
     QDesktopServices::openUrl(QUrl::fromLocalFile(m_config.path()));
 }
 
+bool Settings::isOpen() const
+{
+    return m_window && m_window->isVisible();
+}
+
 QColor Settings::accent() const
 {
     return accentColor(m_config);

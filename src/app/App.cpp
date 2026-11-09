@@ -22,6 +22,9 @@
 
 #include <QCursor>
 #include <QDesktopServices>
+#include <QFile>
+#include <QFileInfo>
+#include <QFileSystemWatcher>
 #include <QScreen>
 #include <QGuiApplication>
 #include <QImageReader>
@@ -30,6 +33,10 @@
 #include <QQmlContext>
 #include <QTimer>
 #include <QUrlQuery>
+
+#if defined(Q_OS_LINUX)
+#include <sys/stat.h>
+#endif
 
 Q_LOGGING_CATEGORY(lcApp, "selsearch.app")
 
@@ -168,7 +175,42 @@ bool App::init(QString *error)
 #endif
 
     m_ipc->setHandler([this](const QJsonObject &req, const IpcServer::Reply &reply) { handle(req, reply); });
+    watchForUpdates();
     return true;
+}
+
+void App::watchForUpdates()
+{
+#if defined(Q_OS_LINUX)
+    // Resolved now: once the file is replaced, /proc/self/exe reads "... (deleted)".
+    const QString exe = QCoreApplication::applicationFilePath();
+    struct stat st {};
+    if (exe.isEmpty() || ::stat(QFile::encodeName(exe).constData(), &st) != 0)
+        return;
+    const auto inode = st.st_ino;
+    const auto mtime = st.st_mtim.tv_sec;
+    auto *watcher = new QFileSystemWatcher(this);
+    watcher->addPath(QFileInfo(exe).absolutePath());  // rpm/dpkg replace files by rename
+    auto *settle = new QTimer(this);
+    settle->setSingleShot(true);
+    settle->setInterval(3000);  // let the package manager finish
+    auto *idle = new QTimer(this);
+    idle->setInterval(2000);
+    connect(watcher, &QFileSystemWatcher::directoryChanged, settle, qOverload<>(&QTimer::start));
+    connect(settle, &QTimer::timeout, this, [exe, inode, mtime, idle] {
+        struct stat now {};
+        if (::stat(QFile::encodeName(exe).constData(), &now) != 0 || !QFileInfo(exe).isExecutable())
+            return;  // removed (uninstall) or not complete yet
+        if (now.st_ino != inode || now.st_mtim.tv_sec != mtime)
+            idle->start();
+    });
+    connect(idle, &QTimer::timeout, this, [this, exe] {
+        if (m_lens->active() || m_launcher->shown() || m_settings->isOpen())
+            return;  // never pull the rug while it is in use
+        qCInfo(lcApp).noquote() << exe << "was updated; restarting into the new version";
+        QCoreApplication::exit(kRestartExitCode);
+    });
+#endif
 }
 
 void App::applyShortcuts()

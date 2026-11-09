@@ -33,6 +33,10 @@ public:
 
     bool init(QString *error);
 
+    // app.exec() returns this when the daemon's own executable was replaced
+    // (a package update); main() then exec()s the new binary in place.
+    static constexpr int kRestartExitCode = 75;
+
     // Opens a URL produced by the UI. "selsearch:search?q=..." is resolved
     // with the configured engine. Web pages go to the results panel or the
     // browser (search.open_in); other URLs (files, apps) open as is.
@@ -41,6 +45,10 @@ public:
     void openUrlIn(const QUrl &url, const QString &title, const QString &openIn);
 
 private:
+    // Linux: notices when the installed selsearchd is replaced and, once the
+    // lens, launcher and settings are closed, restarts into the new version
+    // (same PID, so systemd and compositor autostarts keep working).
+    void watchForUpdates();
     void handle(const QJsonObject &request, const std::function<void(const QJsonObject &)> &reply);
     QJsonObject status() const;
     // Registers the shortcuts.* keys with the platform (in-app on Windows,

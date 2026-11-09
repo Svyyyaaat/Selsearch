@@ -62,6 +62,7 @@ public:
     QString configPath() const;
 
     Q_INVOKABLE void show();
+    bool isOpen() const;
     // First start: show the welcome page once (marker in $XDG_STATE_HOME).
     void showWelcomeIfFirstRun();
     bool welcome() const { return m_welcome; }
