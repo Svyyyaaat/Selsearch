@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Built by .github/workflows/build.yml from `git archive` of the tagged commit:
 #   rpmbuild -ba --define "_sourcedir $PWD" --define "version_override 0.1.0" selsearch.spec
-%{!?version_override: %global version_override 0.1.8}
+%{!?version_override: %global version_override 0.1.9}
 
 Name:           selsearch
 Version:        %{version_override}
@@ -71,6 +71,9 @@ install -Dm644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 %{_datadir}/applications/selsearch.desktop
 
 %changelog
+* Thu Nov 12 2026 Svyyyaaat - 0.1.9-1
+- Hybrid graphics: render on the NVIDIA GPU when it drives the monitors
+- Opaque lens surfaces
 * Mon Nov 09 2026 Svyyyaaat - 0.1.8-1
 - The daemon restarts itself into an updated binary once idle
 * Mon Nov 09 2026 Svyyyaaat - 0.1.7-1
