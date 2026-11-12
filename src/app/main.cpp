@@ -5,6 +5,7 @@
 // or a named pipe on Windows) and, on Windows, by its own global hotkeys.
 
 #include "App.h"
+#include "GpuChoice.h"
 
 #include <QFile>
 #include <QGuiApplication>
@@ -46,6 +47,10 @@ int main(int argc, char **argv)
         }
     }
 #endif
+#if defined(Q_OS_LINUX)
+    // Before Qt picks the EGL implementation (see GpuChoice.h).
+    const QString gpuNote = selsearch::applyGpuChoice();
+#endif
     // The lens overlay needs per-window Wayland layer surfaces; the launcher too.
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM") && !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY"))
         qputenv("QT_QPA_PLATFORM", "wayland;xcb");
@@ -68,6 +73,10 @@ int main(int argc, char **argv)
     QGuiApplication::setApplicationName(QStringLiteral("selsearch"));
     QGuiApplication::setApplicationVersion(QStringLiteral(SELSEARCH_VERSION));
     QGuiApplication::setQuitOnLastWindowClosed(false);
+#if defined(Q_OS_LINUX)
+    if (!gpuNote.isEmpty())
+        qInfo("selsearchd: %s", qPrintable(gpuNote));
+#endif
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
 #ifdef Q_OS_WIN

@@ -40,6 +40,9 @@ class Settings : public QObject {
     Q_PROPERTY(QColor accent READ accent NOTIFY accentChanged)
     // Where the accent comes from right now, for the Appearance page.
     Q_PROPERTY(QString accentStatus READ accentStatus NOTIFY accentChanged)
+    // Linux laptops with an NVIDIA GPU next to an integrated one (general.gpu).
+    Q_PROPERTY(bool hybridGpu READ hybridGpu CONSTANT)
+    Q_PROPERTY(QString gpuStatus READ gpuStatus CONSTANT)
     // The recorder takes keys from the platform (Windows), not Qt key events.
     Q_PROPERTY(bool nativeKeyCapture READ nativeKeyCapture NOTIFY shortcutStateChanged)
     // shortcut id ("lens") -> why it could not be registered
@@ -79,6 +82,10 @@ public:
     Q_INVOKABLE void copy(const QString &text);
 
     QColor accent() const;
+    bool hybridGpu() const;
+    QString gpuStatus() const;
+    // Restart the daemon in place (settings that apply at start, e.g. the GPU).
+    Q_INVOKABLE void restartDaemon() { Q_EMIT restartRequested(); }
     QString accentStatus() const;
 
     bool nativeKeyCapture() const { return m_nativeKeyCapture; }
@@ -97,6 +104,7 @@ Q_SIGNALS:
     void welcomeChanged();
     void shortcutStateChanged();
     void accentChanged();
+    void restartRequested();
     void keyCaptureRequested(bool on);
     void keysCaptured(const QString &sequence);
     void signInRequested(const QUrl &url);

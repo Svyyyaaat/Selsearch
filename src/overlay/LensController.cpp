@@ -21,6 +21,7 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QStandardPaths>
+#include <QSurfaceFormat>
 #include <QTimer>
 #include <QUrl>
 #include <QtConcurrent>
@@ -213,6 +214,14 @@ void LensController::createWindow(LensScreen *s)
         delete obj;
         return;
     }
+#ifndef Q_OS_WIN
+    // The lens covers the screen with an opaque frame: no alpha channel, so
+    // the compositor gets an opaque surface (no blending, and it may skip
+    // drawing what is underneath). The app default has alpha for the launcher.
+    QSurfaceFormat format = window->format();
+    format.setAlphaBufferSize(0);
+    window->setFormat(format);
+#endif
     setupLensWindow(window, s->screen());
     s->window = window;
     if (PerfProbe::enabled())

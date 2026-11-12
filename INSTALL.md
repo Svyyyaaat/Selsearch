@@ -219,6 +219,11 @@ rm -r ~/.config/selsearch ~/.local/share/selsearch ~/.local/state/selsearch   # 
   the same Qt as Selsearch.
 - **Text isn't selectable.** Check *Settings → Text recognition*. The status
   line says which engine and model are used and what's missing.
+- **Laptop with NVIDIA + integrated graphics.** Selsearch renders on the GPU
+  your monitors run on when it can tell (*Appearance → Render on*, shown only
+  on such laptops; *Automatic* picks NVIDIA when it is awake or is the
+  compositor's GPU). Rendering on the other GPU copies every frame across;
+  on a Ryzen + RTX 3070 laptop that was 9–17 ms per frame instead of 0.7 ms.
 - **The lens feels laggy.** Run `selsearch quit; SELSEARCH_PERF=1 selsearchd`,
   open the lens, move the pointer around for ~10 seconds, close it, and send
   the `selsearch.perf` lines (frame rate, render time, UI stalls per screen).

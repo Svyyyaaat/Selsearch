@@ -106,6 +106,7 @@ bool App::init(QString *error)
     m_settings = std::make_unique<Settings>(*m_config, *m_ocr);
     m_settings->setEngine(m_engine.get());
     connect(m_launcher.get(), &Launcher::settingsRequested, m_settings.get(), &Settings::show);
+    connect(m_settings.get(), &Settings::restartRequested, this, [] { QCoreApplication::exit(kRestartExitCode); });
     // pywal / Noctalia / file accents change when the wallpaper or theme does.
     auto *accentWatcher = new AccentWatcher(*m_config, this);
     connect(accentWatcher, &AccentWatcher::changed, this, [this] {

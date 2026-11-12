@@ -317,6 +317,19 @@ ApplicationWindow {
                                                 (family) => win.set("general.font", family))
                 }
             }
+            ChoiceRow {
+                visible: win.settings.hybridGpu
+                title: qsTr("Render on")
+                key: "general.gpu"
+                subtitle: qsTr("Rendering on the GPU your monitors are connected to avoids copying every frame between GPUs. Automatic uses the NVIDIA GPU when it is awake anyway (e.g. driving a monitor) or is the compositor's GPU. %1 Applies after a restart.").arg(win.settings.gpuStatus)
+                options: [{ id: "auto", name: qsTr("Automatic") }, { id: "integrated", name: qsTr("Integrated") }, { id: "nvidia", name: "NVIDIA" }]
+            }
+            SettingRow {
+                visible: win.settings.hybridGpu
+                title: qsTr("Restart Selsearch")
+                subtitle: qsTr("Applies the GPU choice now.")
+                Button { text: qsTr("Restart"); onClicked: win.settings.restartDaemon() }
+            }
             SliderRow { title: qsTr("Dot brightness"); key: "lens.dot_brightness"; from: 0.5; to: 3
                 subtitle: qsTr("How bright the dot field is. Raise it if the dots are hard to see with your accent colour.")
                 visible: win.val("general.theme") !== "mono" }

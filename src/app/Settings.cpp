@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "Settings.h"
 
+#include "GpuChoice.h"
+
 #include "core/Accent.h"
 #include "core/Config.h"
 #include "ocr/ModelStore.h"
@@ -238,6 +240,21 @@ void Settings::openConfigFile()
 bool Settings::isOpen() const
 {
     return m_window && m_window->isVisible();
+}
+
+bool Settings::hybridGpu() const
+{
+#if defined(Q_OS_LINUX)
+    return hasHybridNvidia();
+#else
+    return false;
+#endif
+}
+
+QString Settings::gpuStatus() const
+{
+    const QString d = gpuDecision();
+    return d.startsWith(QLatin1String("GPU: ")) ? tr("Now: %1.").arg(d.mid(5)) : d;
 }
 
 QColor Settings::accent() const

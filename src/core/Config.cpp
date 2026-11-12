@@ -30,6 +30,7 @@ const QVariantMap &Config::defaults()
         {QStringLiteral("general.accent_source"), QString()},  // selsearch | portal | pywal | noctalia | file ("" = from the two above)
         {QStringLiteral("general.accent_file"), QString()},    // for accent_source = file
         {QStringLiteral("general.font"), QString()},           // interface font family, "" = system
+        {QStringLiteral("general.gpu"), QStringLiteral("auto")},  // auto | integrated | nvidia (Linux hybrid graphics; read at start)
         {QStringLiteral("general.color_scheme"), QStringLiteral("auto")},  // auto | light | dark
         {QStringLiteral("general.autostart"), false},  // Windows: start with Windows (Linux: selsearch.service)
 
