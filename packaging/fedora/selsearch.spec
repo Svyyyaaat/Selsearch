@@ -74,6 +74,8 @@ install -Dm644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 * Thu Nov 12 2026 Svyyyaaat - 0.1.9-1
 - Hybrid graphics: render on the NVIDIA GPU when it drives the monitors
 - Opaque lens surfaces
+- White text on dark accent colours
+- Noctalia: dark-theme accent shade when the palette is in light mode
 * Mon Nov 09 2026 Svyyyaaat - 0.1.8-1
 - The daemon restarts itself into an updated binary once idle
 * Mon Nov 09 2026 Svyyyaaat - 0.1.7-1
