@@ -194,7 +194,7 @@ else()
     target_link_libraries(selsearchd PRIVATE Qt6::WaylandClient LayerShellQt::Interface)
 endif()
 
-file(GLOB QML_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS qml/*.qml)
+file(GLOB QML_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS qml/*.qml qml/*.js)
 file(GLOB ICON_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS data/icons/*.svg)
 qt_add_qml_module(selsearchd
     URI Selsearch

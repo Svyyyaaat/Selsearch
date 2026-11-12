@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import "helpers.js" as Helpers
 
 // Round toolbar button with an optional label and a delayed tooltip.
 AbstractButton {
@@ -9,7 +10,9 @@ AbstractButton {
     property bool primary: false
     property bool busy: false
     property color accent: "#8e9bff"
-    property color fg: primary ? "#14151a" : "#eceef4"
+    // On the accent: dark text, or white when the accent is too dark for it
+    // (WCAG relative luminance; 0.18 is where both contrast equally).
+    property color fg: primary ? (Helpers.luminance(accent) < 0.18 ? "#ffffff" : "#14151a") : "#eceef4"
 
     implicitHeight: 36
     implicitWidth: text.length > 0 ? row.implicitWidth + 28 : 36

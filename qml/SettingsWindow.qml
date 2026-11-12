@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import "helpers.js" as Helpers
 
 // Settings: every option maps 1:1 to a key in ~/.config/selsearch/config.toml.
 ApplicationWindow {
@@ -38,6 +39,7 @@ ApplicationWindow {
     readonly property color fgDim: "#9a9eab"
     readonly property color line: Qt.rgba(1, 1, 1, 0.07)
     readonly property color accent: win.settings.accent
+    readonly property color onAccent: Helpers.luminance(accent) < 0.18 ? "#ffffff" : "#14151a"
     // Windows: hotkeys are registered in-app, so no compositor snippet.
     readonly property bool isWindows: Qt.platform.os === "windows"
     property int page: 0
@@ -685,7 +687,7 @@ ApplicationWindow {
                     x: toggle.checked ? parent.width - width - 3 : 3
                     y: 3
                     width: 18; height: 18; radius: 9
-                    color: toggle.checked ? "#14151a" : "#9a9eab"
+                    color: toggle.checked ? win.onAccent : "#9a9eab"
                     Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                 }
             }
@@ -952,7 +954,7 @@ ApplicationWindow {
                     border.color: on ? "transparent" : win.line
                     HoverHandler { id: chHover }
                     TapHandler { onTapped: win.set(cr.key, parent.modelData.id) }
-                    Text { font.family: uiFont.family; id: chText; anchors.centerIn: parent; text: parent.modelData.name; color: parent.on ? "#14151a" : win.fg; font.pixelSize: 13 }
+                    Text { font.family: uiFont.family; id: chText; anchors.centerIn: parent; text: parent.modelData.name; color: parent.on ? win.onAccent : win.fg; font.pixelSize: 13 }
                 }
             }
         }
