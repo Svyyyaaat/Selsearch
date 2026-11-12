@@ -28,6 +28,8 @@ class Config;
 QColor accentColor(const Config &config);
 
 QColor defaultAccent();
+// A light-theme accent (Material tone ~40) as the dark-theme one (tone 80).
+QColor toDarkThemeAccent(const QColor &c);
 
 // The effective source ("selsearch", "portal", "pywal", "noctalia", "file").
 QString accentSource(const Config &config);

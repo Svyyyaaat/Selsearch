@@ -23,6 +23,8 @@
 #include <QDBusVariant>
 #endif
 
+#include <algorithm>
+#include <cmath>
 #include <optional>
 
 Q_LOGGING_CATEGORY(lcAccent, "selsearch.accent")
@@ -94,6 +96,7 @@ QString pywalPath()
 struct NoctaliaFile {
     QString path;
     QRegularExpression pattern;  // capture 1: rrggbb, or r,g,b (kde)
+    QRegularExpression surface;  // the background colour, same capture forms
 };
 
 const QList<NoctaliaFile> &noctaliaFiles()
@@ -105,16 +108,25 @@ const QList<NoctaliaFile> &noctaliaFiles()
         const QString v4 = v4dir.isEmpty() ? cfg + QStringLiteral("/noctalia/colors.json") : QDir(v4dir).filePath(QStringLiteral("colors.json"));
         auto re = [](const char *p) { return QRegularExpression(QString::fromLatin1(p)); };
         return QList<NoctaliaFile>{
-            {v4, {}},  // JSON, mPrimary
-            {cfg + QStringLiteral("/hypr/noctalia.lua"), re(R"re(\bprimary\s*=\s*"rgb\(([0-9a-fA-F]{6})\)")re")},
-            {cfg + QStringLiteral("/hypr/noctalia.conf"), re(R"re(\$primary\s*=\s*rgb\(([0-9a-fA-F]{6})\))re")},
-            {cfg + QStringLiteral("/niri/noctalia.kdl"), re(R"re(active-color\s+"#([0-9a-fA-F]{6})")re")},
-            {cfg + QStringLiteral("/gtk-4.0/noctalia.css"), re(R"re(@define-color accent_color #([0-9a-fA-F]{6}))re")},
-            {cfg + QStringLiteral("/gtk-3.0/noctalia.css"), re(R"re(@define-color accent_color #([0-9a-fA-F]{6}))re")},
-            {cfg + QStringLiteral("/kitty/themes/noctalia.conf"), re(R"re(active_border_color\s+#([0-9a-fA-F]{6}))re")},
-            {cfg + QStringLiteral("/sway/noctalia"), re(R"re(set \$primary\s+#([0-9a-fA-F]{6}))re")},
-            {cfg + QStringLiteral("/mango/noctalia.conf"), re(R"re(focus_color\s*=\s*0x([0-9a-fA-F]{6}))re")},
-            {data + QStringLiteral("/color-schemes/noctalia.colors"), re(R"re(DecorationFocus=(\d+,\d+,\d+))re")},
+            {v4, {}, {}},  // JSON, mPrimary
+            {cfg + QStringLiteral("/hypr/noctalia.lua"), re(R"re(\bprimary\s*=\s*"rgb\(([0-9a-fA-F]{6})\)")re"),
+             re(R"re(\bsurface\s*=\s*"rgb\(([0-9a-fA-F]{6})\)")re")},
+            {cfg + QStringLiteral("/hypr/noctalia.conf"), re(R"re(\$primary\s*=\s*rgb\(([0-9a-fA-F]{6})\))re"),
+             re(R"re(\$surface\s*=\s*rgb\(([0-9a-fA-F]{6})\))re")},
+            {cfg + QStringLiteral("/niri/noctalia.kdl"), re(R"re(\bactive-color\s+"#([0-9a-fA-F]{6})")re"),
+             re(R"re(\binactive-color\s+"#([0-9a-fA-F]{6})")re")},
+            {cfg + QStringLiteral("/gtk-4.0/noctalia.css"), re(R"re(@define-color accent_color #([0-9a-fA-F]{6}))re"),
+             re(R"re(@define-color window_bg_color #([0-9a-fA-F]{6}))re")},
+            {cfg + QStringLiteral("/gtk-3.0/noctalia.css"), re(R"re(@define-color accent_color #([0-9a-fA-F]{6}))re"),
+             re(R"re(@define-color window_bg_color #([0-9a-fA-F]{6}))re")},
+            {cfg + QStringLiteral("/kitty/themes/noctalia.conf"), re(R"re(active_border_color\s+#([0-9a-fA-F]{6}))re"),
+             re(R"re((?m)^background\s+#([0-9a-fA-F]{6}))re")},
+            {cfg + QStringLiteral("/sway/noctalia"), re(R"re(set \$primary\s+#([0-9a-fA-F]{6}))re"),
+             re(R"re(set \$surface\s+#([0-9a-fA-F]{6}))re")},
+            {cfg + QStringLiteral("/mango/noctalia.conf"), re(R"re(focus_color\s*=\s*0x([0-9a-fA-F]{6}))re"),
+             re(R"re(\broot_color\s*=\s*0x([0-9a-fA-F]{6}))re")},
+            {data + QStringLiteral("/color-schemes/noctalia.colors"), re(R"re(DecorationFocus=(\d+,\d+,\d+))re"),
+             re(R"re(\[Colors:Window\][^\[]*?BackgroundNormal=(\d+,\d+,\d+))re")},
         };
     }();
     return files;
@@ -137,20 +149,77 @@ QString noctaliaPath()
     return best.isEmpty() ? noctaliaFiles().first().path : best;
 }
 
+std::optional<QColor> captureColor(const QRegularExpression &re, const QString &text)
+{
+    if (!re.isValid() || re.pattern().isEmpty())
+        return std::nullopt;
+    const QRegularExpressionMatch m = re.match(text);
+    if (!m.hasMatch())
+        return std::nullopt;
+    const QString v = m.captured(1);
+    if (v.contains(QLatin1Char(','))) {
+        const QStringList rgb = v.split(QLatin1Char(','));
+        return QColor(rgb.value(0).toInt(), rgb.value(1).toInt(), rgb.value(2).toInt());
+    }
+    return QColor(QLatin1Char('#') + v);
+}
+
+}  // namespace
+
+// CIE L* of a colour: Material's "tone" (0 black .. 100 white).
+static double toneOf(const QColor &c)
+{
+    auto lin = [](double v) { return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
+    const double y = 0.2126 * lin(c.redF()) + 0.7152 * lin(c.greenF()) + 0.0722 * lin(c.blueF());
+    return y > 216.0 / 24389 ? 116 * std::cbrt(y) - 16 : y * 24389 / 27;
+}
+
+QColor toDarkThemeAccent(const QColor &c)
+{
+    // Material puts primary at tone 40 in light themes and tone 80 in dark
+    // ones, same hue and chroma. Redo that in CIE LCh(ab): set L* to 80, keep
+    // the hue, and give up chroma until the colour fits in sRGB.
+    auto lin = [](double v) { return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
+    auto gam = [](double v) { return v <= 0.0031308 ? 12.92 * v : 1.055 * std::pow(v, 1 / 2.4) - 0.055; };
+    auto f = [](double t) { return t > 216.0 / 24389 ? std::cbrt(t) : (24389.0 / 27 * t + 16) / 116; };
+    auto finv = [](double t) { return t * t * t > 216.0 / 24389 ? t * t * t : (116 * t - 16) * 27 / 24389; };
+    const double r = lin(c.redF()), g = lin(c.greenF()), b = lin(c.blueF());
+    const double X = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+    const double Y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const double Z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+    const double A = 500 * (f(X) - f(Y)), B = 200 * (f(Y) - f(Z));
+    const double hue = std::atan2(B, A);
+    const double L = 80;
+    for (double chroma = std::hypot(A, B); chroma >= 0; chroma -= 1) {
+        const double fy = (L + 16) / 116;
+        const double fx = fy + chroma * std::cos(hue) / 500, fz = fy - chroma * std::sin(hue) / 200;
+        const double x = finv(fx) * 0.95047, y = finv(fy), z = finv(fz) * 1.08883;
+        const double rr = 3.2406 * x - 1.5372 * y - 0.4986 * z;
+        const double gg = -0.9689 * x + 1.8758 * y + 0.0415 * z;
+        const double bb = 0.0557 * x - 0.2040 * y + 1.0570 * z;
+        if (rr >= -1e-4 && rr <= 1.0001 && gg >= -1e-4 && gg <= 1.0001 && bb >= -1e-4 && bb <= 1.0001)
+            return QColor::fromRgbF(float(std::clamp(gam(rr), 0.0, 1.0)), float(std::clamp(gam(gg), 0.0, 1.0)),
+                                    float(std::clamp(gam(bb), 0.0, 1.0)));
+    }
+    return QColor::fromRgbF(0.78f, 0.78f, 0.78f);
+}
+
+namespace {
+
 std::optional<QColor> fromNoctaliaTemplate(const QString &path, const QByteArray &data)
 {
+    const QString text = QString::fromUtf8(data);
     for (const NoctaliaFile &f : noctaliaFiles()) {
-        if (f.path != path || !f.pattern.isValid() || f.pattern.pattern().isEmpty())
+        if (f.path != path)
             continue;
-        const QRegularExpressionMatch m = f.pattern.match(QString::fromUtf8(data));
-        if (!m.hasMatch())
-            return std::nullopt;
-        const QString v = m.captured(1);
-        if (v.contains(QLatin1Char(','))) {
-            const QStringList rgb = v.split(QLatin1Char(','));
-            return QColor(rgb.value(0).toInt(), rgb.value(1).toInt(), rgb.value(2).toInt());
-        }
-        return QColor(QLatin1Char('#') + v);
+        auto primary = captureColor(f.pattern, text);
+        // Templates are rendered for Noctalia's current mode. Selsearch is
+        // always dark: a light-mode primary (dark, tone 40) is the wrong
+        // shade here, so use the matching dark-mode one.
+        const auto surface = captureColor(f.surface, text);
+        if (primary && surface && toneOf(*surface) > 60 && toneOf(*primary) < 65)
+            primary = toDarkThemeAccent(*primary);
+        return primary;
     }
     return std::nullopt;
 }

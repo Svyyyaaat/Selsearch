@@ -2,6 +2,8 @@
 #include "capture/ImageTransform.h"
 #include "compositor/Compositor.h"
 #include "core/Accent.h"
+
+#include <cmath>
 #include "core/Config.h"
 #include "platform/KeyNames.h"
 #include "ocr/OcrEngine.h"
@@ -102,6 +104,21 @@ private Q_SLOTS:
         QTest::qWait(20);
         write(QStringLiteral("share/color-schemes/noctalia.colors"), "[Colors:Window]\nDecorationFocus=255,128,0\n");
         QCOMPARE(accentColor(c), QColor(255, 128, 0));
+        // A light-mode palette (light background): its dark primary is lifted
+        // to the dark-theme shade of the same hue.
+        QTest::qWait(20);
+        write(QStringLiteral("config/gtk-4.0/noctalia.css"),
+              "@define-color accent_color #a06245;\n@define-color window_bg_color #eae4e1;\n");
+        {
+            const QColor lifted = accentColor(c);
+            QVERIFY2(lifted.lightnessF() > 0.7, qPrintable(lifted.name()));
+            QVERIFY(std::abs(lifted.hslHueF() - QColor(QStringLiteral("#a06245")).hslHueF()) < 0.03);
+        }
+        // A dark-mode palette is used as it is.
+        QTest::qWait(20);
+        write(QStringLiteral("config/gtk-4.0/noctalia.css"),
+              "@define-color accent_color #feb695;\n@define-color window_bg_color #1b1918;\n");
+        QCOMPARE(accentColor(c), QColor(QStringLiteral("#feb695")));
 
         // Any file: the first #rrggbb of a template output.
         c.setValue(QStringLiteral("general.accent_source"), QStringLiteral("file"));
