@@ -75,7 +75,9 @@ def stop_daemon():
 def test(setup_env, mons, logdir, name, manual):
     stop_daemon()
     log_path = os.path.join(logdir, f"{name}.log")
-    env = dict(os.environ, SELSEARCH_PERF="1", SELSEARCH_NO_WELCOME="1", **setup_env)
+    # Fedora's Qt logs to the journal when stderr is not a terminal; keep it in our file.
+    env = dict(os.environ, SELSEARCH_PERF="1", SELSEARCH_NO_WELCOME="1",
+               QT_FORCE_STDERR_LOGGING="1", QT_LOGGING_TO_CONSOLE="1", **setup_env)
     with open(log_path, "w") as log:
         proc = subprocess.Popen(["selsearchd"], env=env, stdout=log, stderr=subprocess.STDOUT,
                                 start_new_session=True)
@@ -157,6 +159,9 @@ def main():
             rows.append(f"{name:8} FAILED to start (see {log})")
             continue
         info, stats = result
+        if not info and not stats:
+            rows.append(f"{name:8} no probe output (see {log})")
+            continue
         for screen in sorted(set(info) | set(stats)):
             api, gpu, size, dpr, refresh = info.get(screen, ("?", "?", "?", "?", "?"))
             s = stats.get(screen)
